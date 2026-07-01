@@ -1,0 +1,58 @@
+name: deploy
+
+# main への push で Cloudflare Workers へデプロイする。
+# MoonBit ツールチェーンは Cloudflare のビルド環境に無いため、
+# GitHub Actions 上で moon を入れてビルド → wrangler deploy する
+# （mizchi/cloudflare-starterkit-mbt と同じ形）。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - run: corepack enable
+
+      - name: Install Node.js dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install MoonBit toolchain
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Cache MoonBit packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.moon
+          key: ${{ runner.os }}-moon-${{ hashFiles('moon.mod.json') }}
+          restore-keys: |
+            ${{ runner.os }}-moon-
+
+      - name: Update MoonBit package index
+        run: moon update
+
+      - name: Build (moon + vite → dist/)
+        run: pnpm build
+
+      - name: Deploy to Cloudflare Workers
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

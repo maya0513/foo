@@ -3,11 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "dev": "vite",
     "build": "moon build --target js --release && vite build",
     "preview": "wrangler dev",
-    "test": "moon test --target js"
+    "test": "moon test --target js",
+    "deploy": "pnpm build && wrangler deploy"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp", "workerd"]
   },
   "devDependencies": {
     "vite": "^8.1.2",

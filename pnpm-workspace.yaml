@@ -1,8 +1,14 @@
-allowBuilds:
-  esbuild: true
-  sharp: true
-  workerd: true
-minimumReleaseAgeExclude:
-  - miniflare@4.20260630.0
-  - wrangler@4.106.0
-  - vite@8.1.2
+packages:
+  - "."
+
+# pnpm 10 の 24h リリースエイジ既定を無効化。wrangler / miniflare など
+# フレームワークツールが公開直後だと CI が定期的に落ちるため。
+minimumReleaseAge: 0
+
+# post-install スクリプトの実行許可。無いと `pnpm install --frozen-lockfile`
+# が ERR_PNPM_IGNORED_BUILDS で落ち、esbuild(vite)/workerd(wrangler) の
+# ネイティブバイナリが入らない。
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - workerd
