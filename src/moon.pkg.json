@@ -1,0 +1,9 @@
+{
+  "is-main": true,
+  "import": [
+    { "path": "mizchi/luna/dom", "alias": "element" },
+    { "path": "mizchi/js/browser/dom", "alias": "dom" }
+  ],
+  "link": { "js": { "format": "esm" } },
+  "supported-targets": ["js"]
+}
