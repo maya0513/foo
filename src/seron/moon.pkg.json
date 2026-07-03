@@ -1,0 +1,11 @@
+{
+  "is-main": true,
+  "import": [
+    { "path": "mizchi/luna/dom", "alias": "element" },
+    { "path": "mizchi/js/browser/dom", "alias": "dom" },
+    { "path": "mizchi/luna/x/css", "alias": "css" },
+    { "path": "maya0513/foo/seron/core", "alias": "core" }
+  ],
+  "link": { "js": { "format": "esm" } },
+  "supported-targets": "js"
+}

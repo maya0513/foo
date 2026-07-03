@@ -1,0 +1,4 @@
+{
+  "supported-targets": "js",
+  "test-import": ["moonbitlang/core/debug"]
+}

@@ -11,10 +11,9 @@
     "test": "moon test --target js",
     "deploy": "pnpm build && wrangler deploy"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp", "workerd"]
-  },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
+    "tailwindcss": "^4.3.2",
     "vite": "^8.1.2",
     "vite-plugin-moonbit": "^0.3.0",
     "wrangler": "^4.106.0"

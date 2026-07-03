@@ -1,4 +1,3 @@
 # foo
 
-MoonBitプロジェクト
-mizchi/lunaでhello worldを描画
+MoonBit の web プロジェクト
