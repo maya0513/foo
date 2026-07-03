@@ -1,24 +1,25 @@
 ///|
-/// 意見の色。Blue が賛成、Red が反対。
+/// マスの色。目標は固定黒以外をすべて White にすること。
 pub(all) enum Color {
-  Blue
-  Red
+  White
+  Black
 } derive(Eq, Debug)
 
 ///|
 /// 反対の色。
 pub fn Color::flipped(self : Color) -> Color {
   match self {
-    Blue => Red
-    Red => Blue
+    White => Black
+    Black => White
   }
 }
 
 ///|
-/// 盤面の1マス（1人）。stubborn は頑固者で、説得も伝播も受け付けないが票は持つ。
+/// 盤面の1マス。fixed は固定マスで、反転もステップも受け付けないが、
+/// まわりの色数えには入る。
 pub(all) struct Cell {
   color : Color
-  stubborn : Bool
+  fixed : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -30,7 +31,7 @@ pub(all) struct Board {
 } derive(Eq, Debug)
 
 ///|
-/// 文字列表記から盤面を作る。b=賛成 r=反対 B=頑固な賛成 R=頑固な反対。
+/// 文字列表記から盤面を作る。w=白 b=黒 W=固定白 B=固定黒。
 pub fn parse(rows : Array[String]) -> Board {
   let height = rows.length()
   let width = if height == 0 { 0 } else { rows[0].char_length() }
@@ -38,10 +39,10 @@ pub fn parse(rows : Array[String]) -> Board {
   for row in rows {
     for ch in row {
       let cell = match ch {
-        'b' => Cell::{ color: Blue, stubborn: false }
-        'r' => Cell::{ color: Red, stubborn: false }
-        'B' => Cell::{ color: Blue, stubborn: true }
-        'R' => Cell::{ color: Red, stubborn: true }
+        'w' => Cell::{ color: White, fixed: false }
+        'b' => Cell::{ color: Black, fixed: false }
+        'W' => Cell::{ color: White, fixed: true }
+        'B' => Cell::{ color: Black, fixed: true }
         _ => abort("invalid cell char: \{ch}")
       }
       cells.push(cell)
@@ -58,11 +59,11 @@ pub fn Board::to_rows(self : Board) -> Array[String] {
     let buf = StringBuilder::new()
     for x in 0..<self.width {
       let cell = self.cells[y * self.width + x]
-      let ch = match (cell.color, cell.stubborn) {
-        (Blue, false) => 'b'
-        (Red, false) => 'r'
-        (Blue, true) => 'B'
-        (Red, true) => 'R'
+      let ch = match (cell.color, cell.fixed) {
+        (White, false) => 'w'
+        (Black, false) => 'b'
+        (White, true) => 'W'
+        (Black, true) => 'B'
       }
       buf.write_char(ch)
     }
@@ -82,38 +83,38 @@ pub fn Board::get(self : Board, x : Int, y : Int) -> Cell? {
 }
 
 ///|
-/// 自分+隣接4マスの票を数える。返り値は (青票, 赤票)。
-fn Board::votes(self : Board, x : Int, y : Int) -> (Int, Int) {
-  let mut blue = 0
-  let mut red = 0
+/// 自分+隣接4マスの色を数える。返り値は (白, 黒)。
+fn Board::tally(self : Board, x : Int, y : Int) -> (Int, Int) {
+  let mut white = 0
+  let mut black = 0
   let neighbors = [(x, y), (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
   for pos in neighbors {
     let (nx, ny) = pos
     match self.get(nx, ny) {
       Some(cell) =>
         match cell.color {
-          Blue => blue += 1
-          Red => red += 1
+          White => white += 1
+          Black => black += 1
         }
       None => ()
     }
   }
-  (blue, red)
+  (white, black)
 }
 
 ///|
-/// 1マスの次の状態。頑固者は不変。それ以外は自分+隣接の多数派に従い、
+/// 1マスの次の状態。固定マスは不変。それ以外は自分+隣接で多いほうの色に変わり、
 /// 同数なら現状維持。
 fn Board::next_cell(self : Board, x : Int, y : Int) -> Cell {
   let cell = self.cells[y * self.width + x]
-  if cell.stubborn {
+  if cell.fixed {
     cell
   } else {
-    let (blue, red) = self.votes(x, y)
-    if blue > red {
-      { ..cell, color: Blue }
-    } else if red > blue {
-      { ..cell, color: Red }
+    let (white, black) = self.tally(x, y)
+    if white > black {
+      { ..cell, color: White }
+    } else if black > white {
+      { ..cell, color: Black }
     } else {
       cell
     }
@@ -121,7 +122,7 @@ fn Board::next_cell(self : Board, x : Int, y : Int) -> Cell {
 }
 
 ///|
-/// 議論を1ステップ進める。全マスが同時に多数決で意見を更新する。
+/// 1ステップ進める。全マスが同時に「自分+隣接で多いほうの色」に変わる。
 pub fn Board::step(self : Board) -> Board {
   let cells : Array[Cell] = []
   for y in 0..<self.height {
@@ -133,10 +134,10 @@ pub fn Board::step(self : Board) -> Board {
 }
 
 ///|
-/// 1人を説得して色を反転した新しい盤面を返す。頑固者・盤外は元のまま。
+/// 1マスの白黒を反転した新しい盤面を返す。固定マス・盤外は元のまま。
 pub fn Board::toggle(self : Board, x : Int, y : Int) -> Board {
   match self.get(x, y) {
-    Some(cell) if !(cell.stubborn) => {
+    Some(cell) if !cell.fixed => {
       let cells = self.cells.copy()
       cells[y * self.width + x] = { ..cell, color: cell.color.flipped() }
       { ..self, cells, }
@@ -146,10 +147,10 @@ pub fn Board::toggle(self : Board, x : Int, y : Int) -> Board {
 }
 
 ///|
-/// 勝利判定。説得可能な全員が賛成（青）なら勝ち。頑固な反対派は数えない。
+/// クリア判定。固定黒以外のすべてのマスが白ならクリア。
 pub fn Board::is_won(self : Board) -> Bool {
   for cell in self.cells {
-    if !(cell.stubborn) && cell.color == Red {
+    if !cell.fixed && cell.color == Black {
       return false
     }
   }

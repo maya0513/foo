@@ -7,7 +7,7 @@ pub fn site_title() -> String {
 ///|
 /// 公開しているコンテンツの一覧（名前, パス, 説明）。
 pub fn games() -> Array[(String, String, String)] {
-  [("セロン", "/seron/", "多数決パズル")]
+  [("フリップ", "/flip/", "白と黒の反転パズル")]
 }
 
 ///|
@@ -19,7 +19,6 @@ using @element {
   header_,
   li,
   main_,
-  p,
   render_to,
   span,
   text,
@@ -42,7 +41,7 @@ fn game_items() -> Array[DomNode] {
           text(name),
         ],
         span(class="desc text-sm text-gray-600") <| [
-          text(" — " + desc),
+          text(" - " + desc),
         ],
       ],
     )

@@ -1,10 +1,12 @@
 ///|
-/// レベル定義。rows は盤面の文字列表記、budget は持ち点（説得できる人数）。
+/// ステージ定義。rows は盤面の文字列表記、budget は反転できる回数、
+/// solution は budget 回ちょうどで勝てる答えの一例（反転する座標の列）。
+/// hint はルールを学ぶための一言（不要なステージは空文字）。
 pub(all) struct Level {
-  name : String
-  intro : String
+  hint : String
   rows : Array[String]
   budget : Int
+  solution : Array[(Int, Int)]
 } derive(Eq, Debug)
 
 ///|
@@ -12,32 +14,33 @@ pub(all) struct Level {
 pub(all) struct GameState {
   level_index : Int
   board : Board
-  points_left : Int
+  flips : Int
   steps : Int
 } derive(Eq, Debug)
 
 ///|
-/// プレイヤーの操作。
+/// プレイヤーの操作。Flip はマスの白黒を反転（残り回数を1消費）、
+/// Step は盤面を1ステップ進める。
 pub(all) enum Action {
-  Persuade(Int, Int)
-  Advance
+  Flip(Int, Int)
+  Step
   Reset
   Select(Int)
 } derive(Eq, Debug)
 
 ///|
-/// レベルから初期状態を作る。
+/// ステージから初期状態を作る。
 pub fn state_of(level : Level, index : Int) -> GameState {
   {
     level_index: index,
     board: parse(level.rows),
-    points_left: level.budget,
+    flips: level.budget,
     steps: 0,
   }
 }
 
 ///|
-/// レベル番号から初期状態を作る。
+/// ステージ番号から初期状態を作る。
 pub fn initial_state(index : Int) -> GameState {
   state_of(levels()[index], index)
 }
@@ -54,22 +57,20 @@ pub fn update(state : GameState, action : Action) -> GameState {
       }
     Reset => initial_state(state.level_index)
     _ if state.board.is_won() => state
-    Persuade(x, y) => {
+    Flip(x, y) => {
       let toggled = state.board.toggle(x, y)
-      if state.points_left > 0 && toggled != state.board {
-        { ..state, board: toggled, points_left: state.points_left - 1 }
+      if state.flips > 0 && toggled != state.board {
+        { ..state, board: toggled, flips: state.flips - 1 }
       } else {
         state
       }
     }
-    Advance => { ..state, board: state.board.step(), steps: state.steps + 1 }
+    Step => { ..state, board: state.board.step(), steps: state.steps + 1 }
   }
 }
 
 ///|
-/// 手詰まり判定。持ち点ゼロ・盤面は膠着・未勝利ならリセットするしかない。
+/// 手詰まり判定。反転回数ゼロ・盤面は膠着・未クリアならリセットするしかない。
 pub fn GameState::is_stuck(self : GameState) -> Bool {
-  self.points_left == 0 &&
-  !(self.board.is_won()) &&
-  self.board.step() == self.board
+  self.flips == 0 && !self.board.is_won() && self.board.step() == self.board
 }

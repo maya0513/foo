@@ -4,6 +4,6 @@ test "site_title はサイト名を返す" {
 }
 
 ///|
-test "games にセロンへのリンクがある" {
-  @debug.assert_eq(games().map(g => g.1), ["/seron/"])
+test "games にフリップへのリンクがある" {
+  @debug.assert_eq(games().map(g => g.1), ["/flip/"])
 }

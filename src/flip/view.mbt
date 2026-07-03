@@ -18,42 +18,110 @@ using @element {
 //   pages/styles.css の @source が .mbt をスキャンして抽出する）
 // - 盤面セルなどゲーム固有のスタイルと動的な値（グリッド列数）は
 //   @css（mizchi/luna/x/css）で生成し、main.mbt が <style id="luna-css"> に注入する
-// - cell / blue / red / stubborn などの意味クラスはスタイルを持たないマーカーとして
+// - cell / white / black / fixed などの意味クラスはスタイルを持たないマーカーとして
 //   残し、テストからの検証に使う
 //
 // レイアウトの方針:
 // - ページ全体を h-dvh の縦 flex に収め、どのデバイスでもスクロールさせない
-// - 盤面が flex-1 の中央、説明は「？」ボタンから開くモーダルに退避
-// - 勝利/手詰まりメッセージは固定高さのスロットに出してレイアウトを揺らさない
+//   （ステージ選択もプレイ画面も同様）
+// - 盤面が flex-1 の中央、あそびかた・答えはモーダルに退避
+// - クリア/手詰まりメッセージは固定高さのスロットに出してレイアウトを揺らさない
 
 ///|
-/// アプリ全体の状態。ゲーム本体（core）と UI だけの状態（モーダル開閉）を分けて持つ。
+/// 画面。ステージ選択か、ゲームのプレイ中か。
+pub(all) enum Screen {
+  Select
+  Play(@core.GameState)
+} derive(Eq, Debug)
+
+///|
+/// 開いているモーダル。AnswerConfirm は答えを見る前の確認。
+pub(all) enum Modal {
+  NoModal
+  Rules
+  AnswerConfirm
+  Answer
+} derive(Eq, Debug)
+
+///|
+/// アプリ全体の状態。ゲーム本体（core）と UI だけの状態（画面・モーダル・
+/// クリア済みステージ）を分けて持つ。クリア状況の読み書きは main.mbt が行い、
+/// この層は純粋に保つ。
 pub(all) struct AppState {
-  game : @core.GameState
-  rules_open : Bool
+  screen : Screen
+  modal : Modal
+  cleared : Array[Bool]
 } derive(Eq, Debug)
 
 ///|
 /// アプリへのメッセージ。ゲーム操作は core の Action をそのまま包む。
 pub(all) enum Msg {
+  Enter(Int)
+  Back
+  Next
   Game(@core.Action)
   OpenRules
-  CloseRules
+  OpenAnswer
+  ShowAnswer
+  CloseModal
 } derive(Eq, Debug)
 
 ///|
-/// 初期状態。
-pub fn init_app() -> AppState {
-  { game: @core.initial_state(0), rules_open: false }
+/// 初期状態。ステージ選択画面から始まる。cleared は保存済みのクリア状況。
+pub fn init_app(cleared : Array[Bool]) -> AppState {
+  { screen: Select, modal: NoModal, cleared }
+}
+
+///|
+/// クリア済みマークを立てた新しい配列を返す。
+fn mark_cleared(cleared : Array[Bool], index : Int) -> Array[Bool] {
+  let next = cleared.copy()
+  if index >= 0 && index < next.length() {
+    next[index] = true
+  }
+  next
 }
 
 ///|
 /// メッセージを適用して新しい状態を返す純関数。
 pub fn update_app(state : AppState, msg : Msg) -> AppState {
   match msg {
-    Game(action) => { ..state, game: @core.update(state.game, action) }
-    OpenRules => { ..state, rules_open: true }
-    CloseRules => { ..state, rules_open: false }
+    Enter(i) =>
+      if i >= 0 && i < @core.levels().length() {
+        { ..state, screen: Play(@core.initial_state(i)), modal: NoModal }
+      } else {
+        state
+      }
+    Back => { ..state, screen: Select, modal: NoModal }
+    Next =>
+      match state.screen {
+        Play(game) => {
+          let next = game.level_index + 1
+          if next < @core.levels().length() {
+            { ..state, screen: Play(@core.initial_state(next)), modal: NoModal }
+          } else {
+            { ..state, screen: Select, modal: NoModal }
+          }
+        }
+        Select => state
+      }
+    Game(action) =>
+      match state.screen {
+        Play(game) => {
+          let next = @core.update(game, action)
+          let cleared = if next.board.is_won() {
+            mark_cleared(state.cleared, next.level_index)
+          } else {
+            state.cleared
+          }
+          { ..state, screen: Play(next), cleared }
+        }
+        Select => state
+      }
+    OpenRules => { ..state, modal: Rules }
+    OpenAnswer => { ..state, modal: AnswerConfirm }
+    ShowAnswer => { ..state, modal: Answer }
+    CloseModal => { ..state, modal: NoModal }
   }
 }
 
@@ -70,7 +138,6 @@ fn cell_base() -> String {
       ("align-items", "center"),
       ("justify-content", "center"),
       ("font-size", "1rem"),
-      ("color", "#fff"),
       ("user-select", "none"),
     ]),
     @css.at_sm("width", "3.25rem"),
@@ -83,79 +150,144 @@ fn cell_base() -> String {
 }
 
 ///|
-/// 頑固者の見た目（太字 + 内側の白いリング）。
-fn stubborn_style() -> String {
-  @css.styles([
-    ("font-weight", "700"),
-    ("box-shadow", "inset 0 0 0 3px rgba(255,255,255,0.35)"),
-  ])
-}
-
-///|
-/// 意見ごとの背景色。頑固者は濃い色。
-fn cell_face(color : @core.Color, stubborn : Bool) -> String {
-  match (color, stubborn) {
-    (Blue, false) => @css.css("background", "#3b82f6")
-    (Red, false) => @css.css("background", "#ef4444")
-    (Blue, true) => @css.combine([@css.css("background", "#1e40af"), stubborn_style()])
-    (Red, true) => @css.combine([@css.css("background", "#991b1b"), stubborn_style()])
+/// 色ごとの見た目。固定マスは二重枠で示す。
+fn cell_face(color : @core.Color, fixed : Bool) -> String {
+  match (color, fixed) {
+    (White, false) =>
+      @css.styles([
+        ("background", "#ffffff"),
+        ("box-shadow", "inset 0 0 0 1px #d6d2c8"),
+      ])
+    (Black, false) => @css.css("background", "#1f2937")
+    (White, true) =>
+      @css.styles([
+        ("background", "#ffffff"),
+        (
+          "box-shadow", "inset 0 0 0 1px #9ca3af, inset 0 0 0 4px #ffffff, inset 0 0 0 6px #9ca3af",
+        ),
+      ])
+    (Black, true) =>
+      @css.styles([
+        ("background", "#1f2937"),
+        (
+          "box-shadow", "inset 0 0 0 2px #1f2937, inset 0 0 0 4px rgba(255,255,255,0.6)",
+        ),
+      ])
   }
 }
 
 ///|
-/// 説得できるマスの操作演出。tailwind の hover: は v4 ではホバーできる
+/// 反転できるマスの操作演出。tailwind の hover: は v4 ではホバーできる
 /// デバイスにだけ効き、タッチ端末では active: の押下フィードバックが働く。
 fn clickable_class() -> String {
-  "cursor-pointer transition-transform duration-150 hover:scale-105 hover:shadow-lg active:scale-95"
-}
-
-///|
-/// マスの表示文字。賛成=賛 / 反対=反。
-fn cell_label(cell : @core.Cell) -> String {
-  match cell.color {
-    Blue => "賛"
-    Red => "反"
-  }
+  "cursor-pointer transition-transform duration-150 hover:scale-105 hover:shadow-md active:scale-95"
 }
 
 ///|
 /// マスの class。マーカークラス + @css の生成クラス。
 fn cell_class(cell : @core.Cell, clickable : Bool) -> String {
   let color = match cell.color {
-    Blue => "blue"
-    Red => "red"
+    White => "white"
+    Black => "black"
   }
-  let stubborn = if cell.stubborn { " stubborn" } else { "" }
-  let can_click = clickable && !(cell.stubborn)
+  let fixed = if cell.fixed { " fixed-cell" } else { "" }
+  let can_click = clickable && !cell.fixed
   let click = if can_click { " clickable" } else { "" }
-  let styles = @css.combine([cell_base(), cell_face(cell.color, cell.stubborn)])
+  let styles = @css.combine([cell_base(), cell_face(cell.color, cell.fixed)])
   let interactive = if can_click { " " + clickable_class() } else { "" }
-  "cell \{color}\{stubborn}\{click} \{styles}\{interactive}"
+  "cell \{color}\{fixed}\{click} \{styles}\{interactive}"
 }
 
 ///|
-/// 上部バー。戻るリンク・タイトル・説明モーダルを開く「？」ボタン。
-fn topbar_view(dispatch : (Msg) -> Unit) -> DomNode {
-  div(class="topbar flex items-center justify-between") <| [
-    a(href="/", class="back w-8 text-left text-sm text-gray-500 hover:text-ink") <| [
-      text("←"),
+/// 丸い小さなアイコンボタン（？・×）の class。
+fn icon_button_class() -> String {
+  "h-8 w-8 cursor-pointer rounded-full border border-gray-300 bg-white text-sm text-gray-600"
+}
+
+///|
+/// 上部バー。左スロット・中央タイトル・右スロット（ヘルプ系ボタン）。
+/// 左右の幅が違ってもタイトルが中央からずれないよう 1fr auto 1fr のグリッドにする。
+fn topbar_view(
+  left : DomNode,
+  extra : Array[DomNode],
+  dispatch : (Msg) -> Unit,
+) -> DomNode {
+  div(class="topbar grid grid-cols-[1fr_auto_1fr] items-center") <| [
+    div(class="flex justify-start") <| [
+      left,
     ],
-    h1(class="text-xl font-bold tracking-[0.3em] [text-indent:0.3em] sm:text-2xl") <| [
-      text("セロン"),
+    h1(
+      class="text-xl font-bold tracking-[0.3em] [text-indent:0.3em] sm:text-2xl",
+    ) <| [
+      text("フリップ"),
     ],
-    button(
-      class="help h-8 w-8 cursor-pointer rounded-full border border-gray-300 bg-white text-sm text-gray-600",
-      on=events().click(_ => dispatch(OpenRules)),
-    ) <|
-    [text("？")],
+    {
+      let right = extra +
+        [
+          button(
+            class="help \{icon_button_class()}",
+            on=events().click(_ => dispatch(OpenRules)),
+          ) <| [
+            text("？"),
+          ],
+        ]
+      div(class="flex items-center justify-end gap-2") <| right
+    },
   ]
 }
 
 ///|
-/// 盤面。クリックで説得（Persuade）を発行する。列数はレベルごとに動的なので @css で生成。
+/// ステージ選択のマスひとつ。クリア済みは黒（インク色）で塗る。
+fn stage_button(
+  index : Int,
+  cleared : Bool,
+  dispatch : (Msg) -> Unit,
+) -> DomNode {
+  let base = "stage h-10 w-10 cursor-pointer rounded-xl border text-sm transition-colors sm:h-12 sm:w-12 sm:text-base"
+  let cls = if cleared {
+    "\{base} done border-ink bg-ink text-white"
+  } else {
+    "\{base} border-gray-300 bg-white text-ink hover:border-ink"
+  }
+  button(class=cls, on=events().click(_ => dispatch(Enter(index)))) <| [
+    text("\{index + 1}"),
+  ]
+}
+
+///|
+/// ステージ選択画面。30ステージがならぶ。
+fn select_view(state : AppState, dispatch : (Msg) -> Unit) -> DomNode {
+  let buttons : Array[DomNode] = []
+  let mut cleared_count = 0
+  for i in 0..<@core.levels().length() {
+    let done = state.cleared[i]
+    if done {
+      cleared_count += 1
+    }
+    buttons.push(stage_button(i, done, dispatch))
+  }
+  let back = a(href="/", class="back text-sm text-gray-400 hover:text-ink") <| [
+    text("←"),
+  ]
+  div(class="select flex h-full flex-col") <| [
+    topbar_view(back, [], dispatch),
+    p(class="tagline mt-1 text-xs text-gray-500 sm:text-sm") <| [
+      text("白と黒の反転パズル"),
+    ],
+    div(class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3") <| [
+      div(class="stages grid grid-cols-6 gap-2 sm:gap-2.5") <| buttons,
+      p(class="progress text-xs text-gray-400") <| [
+        text("クリア \{cleared_count} / \{@core.levels().length()}"),
+      ],
+    ],
+  ]
+}
+
+///|
+/// 盤面。クリックで反転（Flip）を発行する。列数はステージごとに動的なので @css で生成。
 fn board_view(game : @core.GameState, dispatch : (Msg) -> Unit) -> DomNode {
   let board = game.board
-  let clickable = game.points_left > 0 && !(board.is_won())
+  let clickable = game.flips > 0 && !board.is_won()
   let cells : Array[DomNode] = []
   for y in 0..<board.height {
     for x in 0..<board.width {
@@ -164,8 +296,8 @@ fn board_view(game : @core.GameState, dispatch : (Msg) -> Unit) -> DomNode {
           cells.push(
             div(
               class=cell_class(cell, clickable),
-              on=events().click(_ => dispatch(Game(@core.Persuade(x, y)))),
-            ) <| [text(cell_label(cell))],
+              on=events().click(_ => dispatch(Game(@core.Flip(x, y)))),
+            ) <| [],
           )
         None => ()
       }
@@ -175,50 +307,37 @@ fn board_view(game : @core.GameState, dispatch : (Msg) -> Unit) -> DomNode {
     "grid-template-columns",
     "repeat(\{board.width}, max-content)",
   )
-  div(class="board grid w-fit justify-center gap-1 rounded-2xl bg-[#e7e3da] p-2 sm:gap-1.5 sm:p-3 \{columns}") <|
-  cells
+  div(
+    class="board grid w-fit justify-center gap-1 rounded-2xl bg-[#e7e3da] p-2 sm:gap-1.5 sm:p-3 \{columns}",
+  ) <| cells
 }
 
 ///|
-/// レベル切り替えタブ。
-fn tabs_view(game : @core.GameState, dispatch : (Msg) -> Unit) -> DomNode {
-  let buttons : Array[DomNode] = []
-  for i in 0..<@core.levels().length() {
-    let base = "tab h-8 w-8 cursor-pointer rounded-full border text-sm sm:h-9 sm:w-9"
-    let cls = if i == game.level_index {
-      "\{base} active border-ink bg-ink text-white"
-    } else {
-      "\{base} border-gray-300 bg-white"
-    }
-    buttons.push(
-      button(class=cls, on=events().click(_ => dispatch(Game(@core.Select(i))))) <| [
-        text("\{i + 1}"),
-      ],
-    )
-  }
-  div(class="tabs mt-2 flex justify-center gap-2") <| buttons
-}
-
-///|
-/// レベル名と説明。説明は高さを確保してレベル切替時のガタつきを防ぐ。
+/// ステージ番号とヒント。ヒントは高さを確保してステージ切替時のガタつきを防ぐ。
 fn level_head_view(game : @core.GameState, level : @core.Level) -> DomNode {
   div(class="level-head") <| [
     h2(class="mt-1 text-sm font-semibold sm:text-base") <| [
-      text("Lv.\{game.level_index + 1} \{level.name}"),
+      text("Stage \{game.level_index + 1}"),
     ],
-    p(class="intro mx-auto min-h-8 max-w-md text-xs text-gray-600 sm:min-h-9 sm:text-sm") <| [
-      text(level.intro),
+    p(
+      class="hint mx-auto min-h-8 max-w-md text-xs text-gray-500 sm:min-h-9 sm:text-sm",
+    ) <| [
+      text(level.hint),
     ],
   ]
 }
 
 ///|
-/// 残り説得ポイントとステップ数。
+/// 残り反転回数とステップ数。
 fn status_view(game : @core.GameState) -> DomNode {
   let badge = "badge rounded-full border border-gray-200 bg-white px-3 py-1 text-xs sm:text-[13px]"
   div(class="status flex flex-wrap justify-center gap-2") <| [
-    span(class=badge) <| [text("説得できる人数 \{game.points_left}")],
-    span(class=badge) <| [text("経過ステップ \{game.steps}")],
+    span(class=badge) <| [
+      text("反転 残り\{game.flips}"),
+    ],
+    span(class=badge) <| [
+      text("ステップ \{game.steps}"),
+    ],
   ]
 }
 
@@ -234,37 +353,56 @@ fn button_class(primary : Bool) -> String {
 }
 
 ///|
-/// 操作ボタン列。
+/// 操作ボタン列。進める・やり直す。答えはトップバー側（「？」の隣）に置き、
+/// ゲーム操作の並びで誤タップしないようにする。
 fn controls_view(game : @core.GameState, dispatch : (Msg) -> Unit) -> DomNode {
   div(class="controls flex justify-center gap-2.5") <| [
     button(
       class=button_class(true),
       disabled=game.board.is_won(),
-      on=events().click(_ => dispatch(Game(@core.Advance))),
-    ) <|
-    [text("議論を進める")],
-    button(class=button_class(false), on=events().click(_ => dispatch(
-      Game(@core.Reset),
-    ))) <|
-    [text("やり直す")],
+      on=events().click(_ => dispatch(Game(@core.Step))),
+    ) <| [
+      text("進める"),
+    ],
+    button(
+      class=button_class(false),
+      on=events().click(_ => dispatch(Game(@core.Reset))),
+    ) <| [
+      text("やり直す"),
+    ],
   ]
 }
 
 ///|
-/// 勝利・手詰まりのメッセージ。固定高さのスロットに出し、
+/// クリア・手詰まりのメッセージ。固定高さのスロットに出し、
 /// 出現してもレイアウトが動かない（=スクロールが発生しない）ようにする。
-fn message_view(game : @core.GameState, used : Int) -> DomNode {
-  let slot = "message-slot flex h-10 items-center justify-center"
+fn message_view(game : @core.GameState, dispatch : (Msg) -> Unit) -> DomNode {
+  let slot = "message-slot flex h-12 items-center justify-center gap-3"
   if game.board.is_won() {
+    let last = game.level_index == @core.levels().length() - 1
     div(class=slot) <| [
-      span(class="message won rounded-full bg-blue-100 px-4 py-1.5 text-xs text-blue-800 sm:text-sm") <| [
-        text("全会一致！ 説得\{used}人・\{game.steps}ステップで可決した。"),
+      span(class="message won text-sm font-semibold sm:text-base") <| [
+        text("クリア！"),
+      ],
+      button(
+        class="next cursor-pointer rounded-full border border-ink bg-ink px-4 py-1.5 text-xs text-white sm:text-sm",
+        on=events().click(_ => dispatch(Next)),
+      ) <| [
+        text(
+          if last {
+            "ステージ選択へ"
+          } else {
+            "つぎのステージへ"
+          },
+        ),
       ],
     ]
   } else if game.is_stuck() {
     div(class=slot) <| [
-      span(class="message stuck rounded-full bg-red-100 px-4 py-1.5 text-xs text-red-800 sm:text-sm") <| [
-        text("議論が膠着…。「やり直す」で再挑戦しよう。"),
+      span(
+        class="message stuck rounded-full bg-gray-200 px-4 py-1.5 text-xs text-gray-600 sm:text-sm",
+      ) <| [
+        text("これ以上変化しない。「やり直す」でもう一度"),
       ],
     ]
   } else {
@@ -273,69 +411,224 @@ fn message_view(game : @core.GameState, used : Int) -> DomNode {
 }
 
 ///|
-/// あそびかたモーダル。背景クリックか「×」で閉じる。
-fn rules_modal(dispatch : (Msg) -> Unit) -> DomNode {
-  let para = "my-2 text-sm text-gray-600"
+/// モーダルの共通の器。背景クリックか「×」で閉じる。
+fn modal_frame(
+  title : String,
+  body : Array[DomNode],
+  dispatch : (Msg) -> Unit,
+) -> DomNode {
+  let children = [
+      div(class="mb-1 flex items-center justify-between") <| [
+        h2(class="text-base font-semibold") <| [
+          text(title),
+        ],
+        button(
+          class="close \{icon_button_class()}",
+          on=events().click(_ => dispatch(CloseModal)),
+        ) <| [
+          text("×"),
+        ],
+      ],
+    ] +
+    body
   div(
     class="modal-backdrop fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4",
-    on=events().click(_ => dispatch(CloseRules)),
+    on=events().click(_ => dispatch(CloseModal)),
   ) <| [
     div(
       class="modal max-h-[80dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 text-left",
       on=events().click(e => e.stopPropagation()),
-    ) <| [
-      div(class="mb-1 flex items-center justify-between") <| [
-        h2(class="text-base font-semibold") <| [text("あそびかた")],
-        button(
-          class="close h-8 w-8 cursor-pointer rounded-full border border-gray-300 text-sm text-gray-600",
-          on=events().click(_ => dispatch(CloseRules)),
-        ) <|
-        [text("×")],
-      ],
-      p(class="text-xs text-gray-400") <| [
-        text("世論をひっくり返す、多数決のパズル"),
-      ],
-      p(class=para) <| [
-        text(
-          "マスをクリックすると、その人ひとりを説得して意見を反転できる（持ち点を1消費）。",
-        ),
-      ],
-      p(class=para) <| [
-        text(
-          "「議論を進める」を押すと、全員が同時に「自分と隣接マスの多数派」に意見を合わせる。" +
-          "少数派に説得された人は同調圧力で元に戻されてしまうが、袋小路に追い込まれた反対派は雪崩のように寝返っていく。",
-        ),
-      ],
-      p(class=para) <| [
-        text(
-          "濃い色のマスは頑固者。意見を絶対に変えないが、票としては数えられる。" +
-          "頑固な反対派以外の全員を賛成（青）にすれば勝ちだ。",
-        ),
-      ],
-      p(class=para) <| [
-        text("どのレベルも、持ち点ちょうどの説得人数で解けることが保証されている。"),
-      ],
-    ],
+    ) <| children,
   ]
 }
 
 ///|
-/// アプリ全体のビュー。h-dvh の縦 flex に収め、盤面が flex-1 の中央に座る。
-pub fn app_view(state : AppState, dispatch : (Msg) -> Unit) -> DomNode {
-  let game = state.game
+/// あそびかたモーダル。
+fn rules_modal(dispatch : (Msg) -> Unit) -> DomNode {
+  let para = "my-2 text-sm text-gray-600"
+  modal_frame(
+    "あそびかた",
+    [
+      p(class="text-xs text-gray-400") <| [
+        text("白と黒の反転パズル"),
+      ],
+      p(class=para) <| [
+        text(
+          "マスをタップすると白黒が反転する（反転できる回数を1消費）。",
+        ),
+      ],
+      p(class=para) <| [
+        text(
+          "「進める」を押すと、すべてのマスが同時に「自分と上下左右をあわせた5マスで多いほうの色」に変わる。" +
+          "同数なら変わらない。孤立した白は黒に戻されてしまうが、囲まれた黒は連鎖して白くなっていく。",
+        ),
+      ],
+      p(class=para) <| [
+        text(
+          "枠が二重のマスは固定マス。反転もステップも受け付けないが、まわりの色数えには入る。" +
+          "固定黒以外のすべてのマスを白にすればクリアだ。",
+        ),
+      ],
+      p(class=para) <| [
+        text(
+          "どのステージも、ちょうどの反転回数でクリアできることが保証されている。困ったら「答え」を見よう。",
+        ),
+      ],
+    ],
+    dispatch,
+  )
+}
+
+///|
+/// 答えモーダルのミニ盤面のマス。★が反転するマス。
+fn answer_cell(cell : @core.Cell, marked : Bool) -> DomNode {
+  let size = @css.styles([
+    ("width", "1.75rem"),
+    ("height", "1.75rem"),
+    ("border-radius", "0.5rem"),
+    ("display", "flex"),
+    ("align-items", "center"),
+    ("justify-content", "center"),
+    ("font-size", "0.8125rem"),
+  ])
+  let face = cell_face(cell.color, cell.fixed)
+  // 反転するのは黒マスなので、白い★と白の内枠で目立たせる
+  let mark = if marked {
+    " " +
+    @css.styles([
+      ("box-shadow", "inset 0 0 0 2px #ffffff"),
+      ("color", "#ffffff"),
+    ])
+  } else {
+    ""
+  }
+  let marker = if marked { " target" } else { "" }
+  div(class="mini-cell\{marker} \{size} \{face}\{mark}") <| [
+    text(if marked { "★" } else { "" }),
+  ]
+}
+
+///|
+/// 答えを見る前の確認モーダル。誤タップでネタバレしないためのワンクッション。
+fn answer_confirm_modal(dispatch : (Msg) -> Unit) -> DomNode {
+  modal_frame(
+    "答えを見ますか？",
+    [
+      p(class="my-2 text-sm text-gray-600") <| [
+        text("本当に答えを見ますか？"),
+      ],
+      div(class="mt-4 flex justify-end gap-2.5") <| [
+        button(
+          class="cancel-answer \{button_class(false)}",
+          on=events().click(_ => dispatch(CloseModal)),
+        ) <| [
+          text("やめておく"),
+        ],
+        button(
+          class="show-answer \{button_class(true)}",
+          on=events().click(_ => dispatch(ShowAnswer)),
+        ) <| [
+          text("答えを見る"),
+        ],
+      ],
+    ],
+    dispatch,
+  )
+}
+
+///|
+/// 答えモーダル。反転するマスを★で示したミニ盤面を出す。
+fn answer_modal(level : @core.Level, dispatch : (Msg) -> Unit) -> DomNode {
+  let board = @core.parse(level.rows)
+  let cells : Array[DomNode] = []
+  for y in 0..<board.height {
+    for x in 0..<board.width {
+      match board.get(x, y) {
+        Some(cell) => {
+          let mut marked = false
+          for pos in level.solution {
+            let (sx, sy) = pos
+            if sx == x && sy == y {
+              marked = true
+            }
+          }
+          cells.push(answer_cell(cell, marked))
+        }
+        None => ()
+      }
+    }
+  }
+  let columns = @css.css(
+    "grid-template-columns",
+    "repeat(\{board.width}, max-content)",
+  )
+  modal_frame(
+    "答え",
+    [
+      p(class="my-2 text-sm text-gray-600") <| [
+        text(
+          "★のマス（\{level.budget}か所）を反転してから、「進める」をくり返す。",
+        ),
+      ],
+      div(
+        class="answer-board my-3 grid w-fit gap-1 rounded-xl bg-[#e7e3da] p-2 \{columns}",
+      ) <| cells,
+      p(class="text-xs text-gray-400") <| [
+        text("答えはひとつとはかぎらない"),
+      ],
+    ],
+    dispatch,
+  )
+}
+
+///|
+/// プレイ画面。盤面が flex-1 の中央に座る。
+fn play_view(
+  state : AppState,
+  game : @core.GameState,
+  dispatch : (Msg) -> Unit,
+) -> DomNode {
   let level = @core.levels()[game.level_index]
-  let used = level.budget - game.points_left
-  div(class="app mx-auto flex h-full max-w-2xl flex-col px-3 py-2 text-center sm:px-4") <| [
-    topbar_view(dispatch),
-    tabs_view(game, dispatch),
+  let back = button(
+    class="back cursor-pointer text-sm text-gray-400 hover:text-ink",
+    on=events().click(_ => dispatch(Back)),
+  ) <| [
+    text("←"),
+  ]
+  let answer = button(
+    class="answer h-8 cursor-pointer rounded-full border border-gray-300 bg-white px-3 text-xs text-gray-600",
+    on=events().click(_ => dispatch(OpenAnswer)),
+  ) <| [
+    text("答え"),
+  ]
+  div(class="play flex h-full flex-col") <| [
+    topbar_view(back, [answer], dispatch),
     level_head_view(game, level),
     status_view(game),
     div(class="flex min-h-0 flex-1 items-center justify-center") <| [
       board_view(game, dispatch),
     ],
     controls_view(game, dispatch),
-    message_view(game, used),
-    if state.rules_open {
+    message_view(game, dispatch),
+    match state.modal {
+      Answer => answer_modal(level, dispatch)
+      AnswerConfirm => answer_confirm_modal(dispatch)
+      _ => fragment([])
+    },
+  ]
+}
+
+///|
+/// アプリ全体のビュー。h-dvh の縦 flex に収める。
+pub fn app_view(state : AppState, dispatch : (Msg) -> Unit) -> DomNode {
+  div(
+    class="app mx-auto flex h-full max-w-2xl flex-col px-3 py-2 text-center sm:px-4",
+  ) <| [
+    match state.screen {
+      Select => select_view(state, dispatch)
+      Play(game) => play_view(state, game, dispatch)
+    },
+    if state.modal == Rules {
       rules_modal(dispatch)
     } else {
       fragment([])

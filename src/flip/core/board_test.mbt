@@ -1,108 +1,120 @@
 ///|
-/// 盤面表記: b=賛成(青) r=反対(赤) B=頑固な賛成 R=頑固な反対
+/// 盤面表記: w=白 b=黒 W=固定白 B=固定黒
 
 ///|
 test "parse は寸法とセルを読み取り、to_rows で往復できる" {
-  let board = @core.parse(["br", "Bb", "rR"])
+  let board = @core.parse(["wb", "Ww", "bB"])
   @debug.assert_eq(board.width, 2)
   @debug.assert_eq(board.height, 3)
-  @debug.assert_eq(board.get(0, 0), Some(@core.Cell::{ color: Blue, stubborn: false }))
-  @debug.assert_eq(board.get(1, 0), Some(@core.Cell::{ color: Red, stubborn: false }))
-  @debug.assert_eq(board.get(0, 1), Some(@core.Cell::{ color: Blue, stubborn: true }))
-  @debug.assert_eq(board.get(1, 2), Some(@core.Cell::{ color: Red, stubborn: true }))
+  @debug.assert_eq(
+    board.get(0, 0),
+    Some(@core.Cell::{ color: White, fixed: false }),
+  )
+  @debug.assert_eq(
+    board.get(1, 0),
+    Some(@core.Cell::{ color: Black, fixed: false }),
+  )
+  @debug.assert_eq(
+    board.get(0, 1),
+    Some(@core.Cell::{ color: White, fixed: true }),
+  )
+  @debug.assert_eq(
+    board.get(1, 2),
+    Some(@core.Cell::{ color: Black, fixed: true }),
+  )
   @debug.assert_eq(board.get(2, 0), None)
   @debug.assert_eq(board.get(0, -1), None)
-  @debug.assert_eq(board.to_rows(), ["br", "Bb", "rR"])
+  @debug.assert_eq(board.to_rows(), ["wb", "Ww", "bB"])
 }
 
 ///|
-/// 中央のマスは自分+隣接4の5票。反対3票で寝返る。
-test "step: 3方を囲まれた内部のマスは多数派に転向する" {
-  let board = @core.parse(["bbb", "brb", "bbb"])
-  // 中央 r: 隣接4がすべて b → 転向
-  @debug.assert_eq(board.step().to_rows(), ["bbb", "bbb", "bbb"])
+/// 中央のマスは自分+隣接4の5マス。白3つで白に変わる。
+test "step: 3方を白に囲まれた内部のマスは白になる" {
+  let board = @core.parse(["www", "wbw", "www"])
+  // 中央 b: 隣接4がすべて w → 白になる
+  @debug.assert_eq(board.step().to_rows(), ["www", "www", "www"])
 }
 
 ///|
-test "step: 内部のマスは隣接2票では転向しない（2x2ブロックは安定）" {
-  let board = @core.parse(["bbbb", "brrb", "brrb", "bbbb"])
+test "step: 内部のマスは隣接2つでは変わらない（2x2の黒は安定）" {
+  let board = @core.parse(["wwww", "wbbw", "wbbw", "wwww"])
   @debug.assert_eq(board.step(), board)
 }
 
 ///|
 test "step: まっすぐな境界は膠着する" {
-  let board = @core.parse(["bbb", "bbb", "rrr", "rrr"])
+  let board = @core.parse(["www", "www", "bbb", "bbb"])
   @debug.assert_eq(board.step(), board)
 }
 
 ///|
-test "step: 孤立した出っ張りは同調圧力で押し戻される" {
-  // 赤の海に説得した1人 → 隣接4がすべて r なので戻ってしまう
-  let board = @core.parse(["rrr", "rbr", "rrr"])
-  @debug.assert_eq(board.step().to_rows(), ["rrr", "rrr", "rrr"])
+test "step: 孤立した白は黒に押し戻される" {
+  // 黒の海に1つだけ反転した白 → 隣接4がすべて b なので戻ってしまう
+  let board = @core.parse(["bbb", "bwb", "bbb"])
+  @debug.assert_eq(board.step().to_rows(), ["bbb", "bbb", "bbb"])
 }
 
 ///|
-test "step: 行き止まりの1マス幅の溝は奥から順に埋まる" {
-  // 幅1の赤い溝（下が青で行き止まり）: 溝尻は隣接3が青 → 1ステップごとに1マス埋まる
-  let board = @core.parse(["brb", "brb", "bbb"])
-  @debug.assert_eq(board.step().to_rows(), ["brb", "bbb", "bbb"])
-  @debug.assert_eq(board.step().step().to_rows(), ["bbb", "bbb", "bbb"])
+test "step: 行き止まりの1マス幅の溝は奥から順に白くなる" {
+  // 幅1の黒い溝（下が白で行き止まり）: 溝尻は隣接3が白 → 1ステップごとに1マス白くなる
+  let board = @core.parse(["wbw", "wbw", "www"])
+  @debug.assert_eq(board.step().to_rows(), ["wbw", "www", "www"])
+  @debug.assert_eq(board.step().step().to_rows(), ["www", "www", "www"])
 }
 
 ///|
-test "step: 角のマスは両隣が反対なら転向する" {
-  let board = @core.parse(["rb", "bb"])
-  @debug.assert_eq(board.step().to_rows(), ["bb", "bb"])
+test "step: 角のマスは両隣が白なら白になる" {
+  let board = @core.parse(["bw", "ww"])
+  @debug.assert_eq(board.step().to_rows(), ["ww", "ww"])
 }
 
 ///|
-test "step: 辺のマスは隣接3すべてが反対のときだけ転向する" {
-  // 上辺中央の r: 隣接は左b・右b・下b → 転向
-  let fill = @core.parse(["brb", "bbb"])
-  @debug.assert_eq(fill.step().to_rows(), ["bbb", "bbb"])
-  // 上辺中央の r: 隣接は左b・右r・下b → 2対2 の同数で現状維持
-  let stay = @core.parse(["brr", "bbb"])
+test "step: 辺のマスは隣接3すべてが白のときだけ白になる" {
+  // 上辺中央の b: 隣接は左w・右w・下w → 白になる
+  let fill = @core.parse(["wbw", "www"])
+  @debug.assert_eq(fill.step().to_rows(), ["www", "www"])
+  // 上辺中央の b: 隣接は左w・右b・下w → 2対2 の同数で現状維持
+  let stay = @core.parse(["wbb", "www"])
   @debug.assert_eq(
     stay.step().get(1, 0),
-    Some(@core.Cell::{ color: Red, stubborn: false }),
+    Some(@core.Cell::{ color: Black, fixed: false }),
   )
 }
 
 ///|
-test "step: 頑固者は転向しないが票としては数えられる" {
-  // 中央の R は青4に囲まれても赤のまま
-  let board = @core.parse(["bbb", "bRb", "bbb"])
+test "step: 固定マスは変わらないが数には入る" {
+  // 中央の B は白4に囲まれても黒のまま
+  let board = @core.parse(["www", "wBw", "www"])
   @debug.assert_eq(board.step(), board)
-  // 頑固な B の票で周囲の r が転向する（溝尻と同じ形）
-  let anchored = @core.parse(["rrr", "BrB", "bbb"])
-  // (1,1) の r: 隣接 = B(左) B(右) r(上) b(下) → 青3対赤2 → 転向
+  // 固定白 W の数で隣の b が白になる（溝尻と同じ形）
+  let anchored = @core.parse(["bbb", "WbW", "www"])
+  // (1,1) の b: 隣接 = W(左) W(右) b(上) w(下) → 白3対黒2 → 白になる
   @debug.assert_eq(
     anchored.step().get(1, 1),
-    Some(@core.Cell::{ color: Blue, stubborn: false }),
+    Some(@core.Cell::{ color: White, fixed: false }),
   )
 }
 
 ///|
-test "toggle: 普通のマスは色が反転し、元の盤面は変わらない" {
-  let board = @core.parse(["rb"])
+test "toggle: 普通のマスは白黒が反転し、元の盤面は変わらない" {
+  let board = @core.parse(["bw"])
   let flipped = board.toggle(0, 0)
-  @debug.assert_eq(flipped.to_rows(), ["bb"])
-  @debug.assert_eq(board.to_rows(), ["rb"])
-  @debug.assert_eq(flipped.toggle(1, 0).to_rows(), ["br"])
+  @debug.assert_eq(flipped.to_rows(), ["ww"])
+  @debug.assert_eq(board.to_rows(), ["bw"])
+  @debug.assert_eq(flipped.toggle(1, 0).to_rows(), ["wb"])
 }
 
 ///|
-test "toggle: 頑固者と盤外は変化しない" {
-  let board = @core.parse(["Rb"])
+test "toggle: 固定マスと盤外は変化しない" {
+  let board = @core.parse(["Bw"])
   @debug.assert_eq(board.toggle(0, 0), board)
   @debug.assert_eq(board.toggle(5, 5), board)
 }
 
 ///|
-test "is_won: 説得可能な全員が青なら勝ち（頑固な反対派は数えない）" {
-  @debug.assert_eq(@core.parse(["bb", "bb"]).is_won(), true)
-  @debug.assert_eq(@core.parse(["bb", "br"]).is_won(), false)
-  @debug.assert_eq(@core.parse(["bb", "bR"]).is_won(), true)
-  @debug.assert_eq(@core.parse(["Bb", "bb"]).is_won(), true)
+test "is_won: 固定黒以外がすべて白ならクリア（固定黒は数えない）" {
+  @debug.assert_eq(@core.parse(["ww", "ww"]).is_won(), true)
+  @debug.assert_eq(@core.parse(["ww", "wb"]).is_won(), false)
+  @debug.assert_eq(@core.parse(["ww", "wB"]).is_won(), true)
+  @debug.assert_eq(@core.parse(["Ww", "ww"]).is_won(), true)
 }

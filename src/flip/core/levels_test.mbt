@@ -1,11 +1,11 @@
 ///|
-/// レベル検証用の総当たりソルバー。
-/// 「先に k 人を説得してから議論を進めるだけ」で勝てるかを調べる。
-/// プレイヤーは説得とステップを交互にもできるが、これは十分条件になる。
+/// ステージ検証用の総当たりソルバー。
+/// 「先に k マスを反転してからステップを進めるだけ」で勝てるかを調べる。
+/// プレイヤーは反転とステップを交互にもできるが、これは十分条件になる。
 
 ///|
-/// 現在の盤面から議論を進めるだけで勝てるか。膠着したら打ち切る。
-fn wins_by_advancing(board : @core.Board, max_steps : Int) -> Bool {
+/// 現在の盤面からステップを進めるだけで勝てるか。膠着したら打ち切る。
+fn wins_by_stepping(board : @core.Board, max_steps : Int) -> Bool {
   let mut b = board
   if b.is_won() {
     return true
@@ -24,13 +24,13 @@ fn wins_by_advancing(board : @core.Board, max_steps : Int) -> Bool {
 }
 
 ///|
-/// 説得候補（頑固でない反対派）の座標一覧。
-fn red_positions(board : @core.Board) -> Array[(Int, Int)] {
+/// 反転できる候補（固定でない黒）の座標一覧。
+fn black_positions(board : @core.Board) -> Array[(Int, Int)] {
   let positions : Array[(Int, Int)] = []
   for y in 0..<board.height {
     for x in 0..<board.width {
       match board.get(x, y) {
-        Some(cell) if !(cell.stubborn) && cell.color == Red =>
+        Some(cell) if !cell.fixed && cell.color == Black =>
           positions.push((x, y))
         _ => ()
       }
@@ -40,19 +40,19 @@ fn red_positions(board : @core.Board) -> Array[(Int, Int)] {
 }
 
 ///|
-/// reds[start..] から残り k 人を選んで説得し、勝てる組み合わせがあるか。
+/// blacks[start..] から残り k マスを選んで反転し、勝てる組み合わせがあるか。
 fn search(
   board : @core.Board,
-  reds : Array[(Int, Int)],
+  blacks : Array[(Int, Int)],
   start : Int,
   k : Int,
 ) -> Bool {
   if k == 0 {
-    return wins_by_advancing(board, 40)
+    return wins_by_stepping(board, 60)
   }
-  for i in start..<reds.length() {
-    let (x, y) = reds[i]
-    if search(board.toggle(x, y), reds, i + 1, k - 1) {
+  for i in start..<blacks.length() {
+    let (x, y) = blacks[i]
+    if search(board.toggle(x, y), blacks, i + 1, k - 1) {
       return true
     }
   }
@@ -60,11 +60,11 @@ fn search(
 }
 
 ///|
-/// 勝つのに必要な最小説得人数（max まで探索）。
-fn min_persuasions(board : @core.Board, max : Int) -> Int? {
-  let reds = red_positions(board)
-  for k in 0..=max {
-    if search(board, reds, 0, k) {
+/// 勝つのに必要な最小の反転回数（max まで探索）。
+fn min_flips(board : @core.Board, max : Int) -> Int? {
+  let blacks = black_positions(board)
+  for k in 0..<=max {
+    if search(board, blacks, 0, k) {
       return Some(k)
     }
   }
@@ -72,29 +72,67 @@ fn min_persuasions(board : @core.Board, max : Int) -> Int? {
 }
 
 ///|
-test "全レベル: 初期盤面は膠着状態（勝手には動かない）" {
-  let frozen : Array[(String, Bool)] = []
-  for level in @core.levels() {
-    let board = @core.parse(level.rows)
-    frozen.push((level.name, board.step() == board))
+test "全ステージ: 初期盤面は膠着状態（勝手には動かない）" {
+  let frozen : Array[(Int, Bool)] = []
+  for i in 0..<@core.levels().length() {
+    let board = @core.parse(@core.levels()[i].rows)
+    frozen.push((i + 1, board.step() == board))
   }
-  let expected : Array[(String, Bool)] = []
-  for level in @core.levels() {
-    expected.push((level.name, true))
+  let expected : Array[(Int, Bool)] = []
+  for i in 0..<@core.levels().length() {
+    expected.push((i + 1, true))
   }
   @debug.assert_eq(frozen, expected)
 }
 
 ///|
-test "全レベル: budget はソルバーが求めた最小説得人数と一致する" {
-  let minima : Array[(String, Int?)] = []
-  for level in @core.levels() {
+test "全ステージ: budget はソルバーが求めた最小の反転回数と一致する" {
+  let minima : Array[(Int, Int?)] = []
+  for i in 0..<@core.levels().length() {
+    let level = @core.levels()[i]
     let board = @core.parse(level.rows)
-    minima.push((level.name, min_persuasions(board, level.budget + 2)))
+    minima.push((i + 1, min_flips(board, level.budget)))
   }
-  let expected : Array[(String, Int?)] = []
-  for level in @core.levels() {
-    expected.push((level.name, Some(level.budget)))
+  let expected : Array[(Int, Int?)] = []
+  for i in 0..<@core.levels().length() {
+    expected.push((i + 1, Some(@core.levels()[i].budget)))
   }
   @debug.assert_eq(minima, expected)
+}
+
+///|
+test "全ステージ: solution は budget 回ちょうどで、実行すると勝てる" {
+  let results : Array[(Int, Int, Bool)] = []
+  for i in 0..<@core.levels().length() {
+    let level = @core.levels()[i]
+    let mut board = @core.parse(level.rows)
+    for pos in level.solution {
+      let (x, y) = pos
+      board = board.toggle(x, y)
+    }
+    results.push((i + 1, level.solution.length(), wins_by_stepping(board, 60)))
+  }
+  let expected : Array[(Int, Int, Bool)] = []
+  for i in 0..<@core.levels().length() {
+    expected.push((i + 1, @core.levels()[i].budget, true))
+  }
+  @debug.assert_eq(results, expected)
+}
+
+///|
+test "全ステージ: solution の座標はすべて盤上の（固定でない）黒マス" {
+  for i in 0..<@core.levels().length() {
+    let level = @core.levels()[i]
+    let board = @core.parse(level.rows)
+    for pos in level.solution {
+      let (x, y) = pos
+      match board.get(x, y) {
+        Some(cell) => {
+          @debug.assert_eq(cell.fixed, false)
+          @debug.assert_eq(cell.color, @core.Color::Black)
+        }
+        None => abort("solution out of board: stage \{i + 1} (\{x}, \{y})")
+      }
+    }
+  }
 }

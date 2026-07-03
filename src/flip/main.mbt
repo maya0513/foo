@@ -1,8 +1,8 @@
 ///|
-/// エントリポイント。#app にゲームをマウントする。
+/// エントリポイント。保存済みのクリア状況を読み込んで #app にゲームをマウントする。
 fn main {
   match @dom.document().getElementById("app") {
-    Some(el) => run(el, init_app())
+    Some(el) => run(el, init_app(load_cleared(@core.levels().length())))
     None => println("Error: #app element not found")
   }
 }
@@ -10,8 +10,18 @@ fn main {
 ///|
 /// Elm 風のループ。状態を描画し、メッセージが来たら update した新しい状態で描き直す。
 /// 状態はこの関数の引数としてだけ存在し、可変のグローバルを持たない。
+/// クリア状況が変わったときだけ localStorage へ保存する（副作用はここに閉じる）。
 fn run(el : @dom.Element, state : AppState) -> Unit {
-  @element.render_to(el, app_view(state, msg => run(el, update_app(state, msg))))
+  @element.render_to(
+    el,
+    app_view(state, msg => {
+      let next = update_app(state, msg)
+      if next.cleared != state.cleared {
+        save_cleared(next.cleared)
+      }
+      run(el, next)
+    }),
+  )
   inject_luna_css()
 }
 
