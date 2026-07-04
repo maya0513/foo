@@ -55,6 +55,8 @@ pub(all) struct AppState {
 
 ///|
 /// アプリへのメッセージ。ゲーム操作は core の Action をそのまま包む。
+/// SyncRoute はブラウザの戻る/進むボタン（popstate）由来の画面同期専用で、
+/// history には一切書き込まない（main.mbt の run がそこで分岐する）。
 pub(all) enum Msg {
   Enter(Int)
   Back
@@ -64,6 +66,7 @@ pub(all) enum Msg {
   OpenAnswer
   ShowAnswer
   CloseModal
+  SyncRoute(Int?)
 } derive(Eq, Debug)
 
 ///|
@@ -122,6 +125,9 @@ pub fn update_app(state : AppState, msg : Msg) -> AppState {
     OpenAnswer => { ..state, modal: AnswerConfirm }
     ShowAnswer => { ..state, modal: Answer }
     CloseModal => { ..state, modal: NoModal }
+    SyncRoute(Some(i)) =>
+      { ..state, screen: Play(@core.initial_state(i)), modal: NoModal }
+    SyncRoute(None) => { ..state, screen: Select, modal: NoModal }
   }
 }
 
@@ -151,26 +157,32 @@ fn cell_base() -> String {
 
 ///|
 /// 色ごとの見た目。固定マスは二重枠で示す。
+/// 台座色（#d9d4c8、board_view/answer_modal）に対してどちらの色もはっきり
+/// 浮くよう、全マス共通の外側ドロップシャドウ + 白マスは太めの内枠で縁取る。
 fn cell_face(color : @core.Color, fixed : Bool) -> String {
+  let lift = "0 1px 2px rgba(31,41,55,0.2)"
   match (color, fixed) {
     (White, false) =>
       @css.styles([
         ("background", "#ffffff"),
-        ("box-shadow", "inset 0 0 0 1px #d6d2c8"),
+        ("box-shadow", "\{lift}, inset 0 0 0 2px #9aa1ab"),
       ])
-    (Black, false) => @css.css("background", "#1f2937")
+    (Black, false) =>
+      @css.styles([("background", "#1f2937"), ("box-shadow", lift)])
     (White, true) =>
       @css.styles([
         ("background", "#ffffff"),
         (
-          "box-shadow", "inset 0 0 0 1px #9ca3af, inset 0 0 0 4px #ffffff, inset 0 0 0 6px #9ca3af",
+          "box-shadow",
+          "\{lift}, inset 0 0 0 1px #6b7280, inset 0 0 0 4px #ffffff, inset 0 0 0 6px #6b7280",
         ),
       ])
     (Black, true) =>
       @css.styles([
         ("background", "#1f2937"),
         (
-          "box-shadow", "inset 0 0 0 2px #1f2937, inset 0 0 0 4px rgba(255,255,255,0.6)",
+          "box-shadow",
+          "\{lift}, inset 0 0 0 2px #1f2937, inset 0 0 0 4px rgba(255,255,255,0.75)",
         ),
       ])
   }
@@ -237,20 +249,30 @@ fn topbar_view(
 }
 
 ///|
-/// ステージ選択のマスひとつ。クリア済みは黒（インク色）で塗る。
+/// ステージ選択のマスひとつ。ゲームの目的（黒を白に染める）と合わせ、
+/// クリア済みは白地に太いインク枠+✓バッジで示す。未クリアは「まだ染まっていない」
+/// ニュートラルなグレーで、ロック済みだと誤読されないようにする。
 fn stage_button(
   index : Int,
   cleared : Bool,
   dispatch : (Msg) -> Unit,
 ) -> DomNode {
-  let base = "stage h-10 w-10 cursor-pointer rounded-xl border text-sm transition-colors sm:h-12 sm:w-12 sm:text-base"
+  let base = "stage relative h-10 w-10 cursor-pointer rounded-xl border text-sm transition-colors sm:h-12 sm:w-12 sm:text-base"
   let cls = if cleared {
-    "\{base} done border-ink bg-ink text-white"
+    "\{base} done border-2 border-ink bg-white text-ink"
   } else {
-    "\{base} border-gray-300 bg-white text-ink hover:border-ink"
+    "\{base} border-gray-300 bg-gray-100 text-ink/70 hover:border-ink"
+  }
+  let badge = if cleared {
+    span(
+      class="done-badge absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-ink text-[10px] leading-none text-white",
+    ) <| [text("✓")]
+  } else {
+    fragment([])
   }
   button(class=cls, on=events().click(_ => dispatch(Enter(index)))) <| [
     text("\{index + 1}"),
+    badge,
   ]
 }
 
@@ -308,7 +330,7 @@ fn board_view(game : @core.GameState, dispatch : (Msg) -> Unit) -> DomNode {
     "repeat(\{board.width}, max-content)",
   )
   div(
-    class="board grid w-fit justify-center gap-1 rounded-2xl bg-[#e7e3da] p-2 sm:gap-1.5 sm:p-3 \{columns}",
+    class="board grid w-fit justify-center gap-1 rounded-2xl bg-[#d9d4c8] p-2 sm:gap-1.5 sm:p-3 \{columns}",
   ) <| cells
 }
 
@@ -385,7 +407,7 @@ fn message_view(game : @core.GameState, dispatch : (Msg) -> Unit) -> DomNode {
         text("クリア！"),
       ],
       button(
-        class="next cursor-pointer rounded-full border border-ink bg-ink px-4 py-1.5 text-xs text-white sm:text-sm",
+        class="next cursor-pointer rounded-full border-2 border-ink bg-white px-4 py-1.5 text-xs text-ink sm:text-sm",
         on=events().click(_ => dispatch(Next)),
       ) <| [
         text(
@@ -571,7 +593,7 @@ fn answer_modal(level : @core.Level, dispatch : (Msg) -> Unit) -> DomNode {
         ),
       ],
       div(
-        class="answer-board my-3 grid w-fit gap-1 rounded-xl bg-[#e7e3da] p-2 \{columns}",
+        class="answer-board my-3 grid w-fit gap-1 rounded-xl bg-[#d9d4c8] p-2 \{columns}",
       ) <| cells,
       p(class="text-xs text-gray-400") <| [
         text("答えはひとつとはかぎらない"),
