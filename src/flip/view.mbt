@@ -172,16 +172,16 @@ fn cell_base(cols : Int, rows : Int) -> String {
     "1.75",
     "4.5",
   )
-  // sm 以上: app は max-w-2xl(42rem) で頭打ちになるので min(100vw, 42rem) を使う。
+  // sm 以上: app は max-w-3xl(48rem) で頭打ちになるので min(100vw, 48rem) を使う。
   // app px-4(1rem)*2 + 盤面 sm:p-3(0.75rem)*2 = 3.5rem。
   let sm_fit = fit_size(
     cols,
     rows,
-    "calc(min(100vw, 42rem) - 3.5rem)",
+    "calc(min(100vw, 48rem) - 3.5rem)",
     "16.5",
     "0.375",
     "1.5",
-    "5.5",
+    "7",
   )
   @css.combine([
     @css.styles([
@@ -277,7 +277,9 @@ fn topbar_view(
   extra : Array[DomNode],
   dispatch : (Msg) -> Unit,
 ) -> DomNode {
-  div(class="topbar grid grid-cols-[1fr_auto_1fr] items-center") <| [
+  div(
+    class="topbar mx-auto grid w-full max-w-xl grid-cols-[1fr_auto_1fr] items-center",
+  ) <| [
     div(class="flex justify-start") <| [
       left,
     ],
@@ -318,7 +320,7 @@ fn stage_size() -> String {
     stage_cols,
     stage_rows,
     "calc(100vw - 1.5rem)",
-    "6.5",
+    "7",
     "0.5",
     "1.75",
     "4",
@@ -326,11 +328,11 @@ fn stage_size() -> String {
   let sm_fit = fit_size(
     stage_cols,
     stage_rows,
-    "calc(min(100vw, 42rem) - 2rem)",
-    "6.5",
+    "calc(min(100vw, 48rem) - 2rem)",
+    "7",
     "0.625",
     "2.25",
-    "5",
+    "6.5",
   )
   @css.combine([
     @css.styles([("width", mobile_fit), ("height", mobile_fit)]),
@@ -387,10 +389,12 @@ fn select_view(state : AppState, dispatch : (Msg) -> Unit) -> DomNode {
     p(class="tagline mt-1 text-xs text-gray-500 sm:text-sm") <| [
       text("白と黒の反転パズル"),
     ],
-    div(class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3") <| [
+    div(
+      class="flex min-h-0 flex-1 flex-col items-center justify-start gap-3",
+    ) <| [
       // grid-cols-5 は stage_cols(5)、gap は stage_size() の gap 引数と一致させること。
       div(class="stages grid grid-cols-5 gap-2 sm:gap-2.5") <| buttons,
-      p(class="progress text-xs text-gray-400") <| [
+      p(class="progress text-sm font-semibold text-ink/80 sm:text-base") <| [
         text("クリア \{cleared_count} / \{@core.levels().length()}"),
       ],
     ],
@@ -736,7 +740,7 @@ fn play_view(
 /// アプリ全体のビュー。h-dvh の縦 flex に収める。
 pub fn app_view(state : AppState, dispatch : (Msg) -> Unit) -> DomNode {
   div(
-    class="app mx-auto flex h-full max-w-2xl flex-col px-3 py-2 text-center sm:px-4",
+    class="app mx-auto flex h-full max-w-3xl flex-col px-3 py-2 text-center sm:px-4",
   ) <| [
     match state.screen {
       Select => select_view(state, dispatch)
