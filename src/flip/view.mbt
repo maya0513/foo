@@ -239,7 +239,8 @@ fn cell_face(color : @core.Color, fixed : Bool) -> String {
 /// 反転できるマスの操作演出。tailwind の hover: は v4 ではホバーできる
 /// デバイスにだけ効き、タッチ端末では active: の押下フィードバックが働く。
 fn clickable_class() -> String {
-  "cursor-pointer transition-transform duration-150 hover:scale-105 hover:shadow-md active:scale-95"
+  // shadow 系は @css（luna-css、後読み）の box-shadow に負けるので使わない
+  "cursor-pointer transition-transform duration-150 hover:scale-105 active:scale-95"
 }
 
 ///|
@@ -345,19 +346,21 @@ fn stage_size() -> String {
 }
 
 ///|
-/// ステージ選択のマスひとつ。ゲームの目的（黒を白に染める）と合わせ、
-/// クリア済みは白地に太いインク枠+✓バッジで示す。未クリアは「まだ染まっていない」
-/// ニュートラルなグレーで、ロック済みだと誤読されないようにする。
+/// ステージ選択のマスひとつ。盤面のマスと同じ言語で表現する:
+/// 未クリアは黒マス（まだ染まっていない）、クリア済みは白マス+✓バッジ。
+/// クリアするほど選択画面自体が白く反転していき、ゲームの目的がひと目で伝わる。
+/// 背景（paper）に対する視認性もこれで確保される（旧 gray-100 は paper と
+/// ほぼ同色で、ボタンが背景に溶けて無効にも見えていた）。
 fn stage_button(
   index : Int,
   cleared : Bool,
   dispatch : (Msg) -> Unit,
 ) -> DomNode {
-  let base = "stage relative cursor-pointer rounded-xl border text-sm transition-colors sm:text-base \{stage_size()}"
+  let base = "stage relative \{clickable_class()} rounded-xl text-sm sm:text-base \{stage_size()}"
   let cls = if cleared {
-    "\{base} done border-2 border-ink bg-white text-ink"
+    "\{base} done border-2 border-ink bg-white text-ink shadow-sm"
   } else {
-    "\{base} border-gray-300 bg-gray-100 text-ink/70 hover:border-ink"
+    "\{base} border border-ink bg-ink text-white/90 shadow-sm"
   }
   let badge = if cleared {
     span(
@@ -392,8 +395,10 @@ fn select_view(state : AppState, dispatch : (Msg) -> Unit) -> DomNode {
     p(class="tagline mt-1 text-xs text-gray-500 sm:text-sm") <| [
       text("白と黒の反転パズル"),
     ],
+    // justify-center: 縦の残り空間の中央にグリッドを置き、画面下部に
+    // 空白が偏らないようにする（盤面を flex-1 中央に置くプレイ画面と揃える）
     div(
-      class="flex min-h-0 flex-1 flex-col items-center justify-start gap-3",
+      class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3",
     ) <| [
       // grid-cols-5 は stage_cols(5)、gap は stage_size() の gap 引数と一致させること。
       div(class="stages grid grid-cols-5 gap-2 sm:gap-2.5") <| buttons,
