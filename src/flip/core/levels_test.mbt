@@ -86,16 +86,23 @@ test "全ステージ: 初期盤面は膠着状態（勝手には動かない）
 }
 
 ///|
-test "全ステージ: budget はソルバーが求めた最小の反転回数と一致する" {
+/// 全探索は黒マス数 n・反転回数 k について C(n, k) 通りを試すため、
+/// 大きく複合的なステージでは非現実的な時間がかかる。
+/// この閾値以下のステージだけ、budget が本当に最小かをソルバーで検証する
+/// （それを超えるステージは次のテストで「solution が機能する」ことのみ保証する）。
+const SOLVABLE_BLACK_COUNT_LIMIT : Int = 20
+
+///|
+test "軽量なステージ: budget はソルバーが求めた最小の反転回数と一致する" {
   let minima : Array[(Int, Int?)] = []
+  let expected : Array[(Int, Int?)] = []
   for i in 0..<@core.levels().length() {
     let level = @core.levels()[i]
     let board = @core.parse(level.rows)
-    minima.push((i + 1, min_flips(board, level.budget)))
-  }
-  let expected : Array[(Int, Int?)] = []
-  for i in 0..<@core.levels().length() {
-    expected.push((i + 1, Some(@core.levels()[i].budget)))
+    if black_positions(board).length() <= SOLVABLE_BLACK_COUNT_LIMIT {
+      minima.push((i + 1, min_flips(board, level.budget)))
+      expected.push((i + 1, Some(level.budget)))
+    }
   }
   @debug.assert_eq(minima, expected)
 }

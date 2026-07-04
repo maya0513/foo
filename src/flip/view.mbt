@@ -132,13 +132,28 @@ pub fn update_app(state : AppState, msg : Msg) -> AppState {
 }
 
 ///|
-/// セルの共通スタイル。モバイルは 2.5rem、sm 以上で 3.25rem。
-/// 高さの低い画面（横持ちスマホ等）ではさらに縮めて無スクロールを保つ。
-fn cell_base() -> String {
+/// セルの共通スタイル。基準サイズはモバイル 2.5rem、sm 以上で 3.25rem。
+/// ステージによって列数・行数が大きく異なる（最大 30x8 程度）ため、
+/// 「基準サイズ」と「画面の残り幅・残り高さを列数・行数で割った値」の
+/// 小さいほうを採用し、大きな盤面でも横スクロール・縦スクロールなしで
+/// 収まるようにする（min() は上限クランプとして働く）。
+/// gap（board_view の gap-1 / sm:gap-1.5）は列数・行数が多いと合計が
+/// 無視できないサイズになるため、計算式にその分もあらかじめ差し引く。
+fn cell_base(cols : Int, rows : Int) -> String {
+  // 2.5rem: app の px-3(1.5rem) + 盤面の p-2(1rem)。14rem: トップバー・
+  // ステージ見出し・ステータス・操作ボタン・メッセージ欄の高さの概算。
+  // 0.25rem(gap-1) x (マス数-1) が列間・行間の隙間の合計。
+  let mobile_fit = "min(2.5rem, calc((100vw - 2.5rem - \{cols - 1} * 0.25rem) / \{cols}), calc((100dvh - 14rem - \{rows - 1} * 0.25rem) / \{rows}))"
+  let sm_fit = "min(3.25rem, calc((42rem - 3.5rem - \{cols - 1} * 0.375rem) / \{cols}), calc((100dvh - 14rem - \{rows - 1} * 0.375rem) / \{rows}))"
+  // 横持ちスマホ等（高さ 520px 未満）は幅が sm（640px）を超えることもあるため、
+  // gap/padding がモバイル版・sm 版のどちらであっても破綻しないよう両方を候補にする。
+  fn short_fit() -> String {
+    "min(2rem, calc((100vw - 2.5rem - \{cols - 1} * 0.25rem) / \{cols}), calc((100vw - 3.5rem - \{cols - 1} * 0.375rem) / \{cols}), calc((100dvh - 11rem - \{rows - 1} * 0.25rem) / \{rows}), calc((100dvh - 11rem - \{rows - 1} * 0.375rem) / \{rows}))"
+  }
   @css.combine([
     @css.styles([
-      ("width", "2.5rem"),
-      ("height", "2.5rem"),
+      ("width", mobile_fit),
+      ("height", mobile_fit),
       ("border-radius", "0.625rem"),
       ("display", "flex"),
       ("align-items", "center"),
@@ -146,11 +161,13 @@ fn cell_base() -> String {
       ("font-size", "1rem"),
       ("user-select", "none"),
     ]),
-    @css.at_sm("width", "3.25rem"),
-    @css.at_sm("height", "3.25rem"),
+    @css.at_sm("width", sm_fit),
+    @css.at_sm("height", sm_fit),
     @css.at_sm("font-size", "1.125rem"),
-    @css.media("max-height:520px", "width", "2rem"),
-    @css.media("max-height:520px", "height", "2rem"),
+    // 横持ちスマホ等（高さ 520px 未満）は sm 幅（640px）以上にもなり得るため、
+    // gap/padding がモバイル版・sm 版どちらでも破綻しないよう両方を候補に含める。
+    @css.media("max-height:520px", "width", short_fit()),
+    @css.media("max-height:520px", "height", short_fit()),
     @css.media("max-height:520px", "font-size", "0.875rem"),
   ])
 }
@@ -197,7 +214,12 @@ fn clickable_class() -> String {
 
 ///|
 /// マスの class。マーカークラス + @css の生成クラス。
-fn cell_class(cell : @core.Cell, clickable : Bool) -> String {
+fn cell_class(
+  cell : @core.Cell,
+  clickable : Bool,
+  cols : Int,
+  rows : Int,
+) -> String {
   let color = match cell.color {
     White => "white"
     Black => "black"
@@ -205,7 +227,10 @@ fn cell_class(cell : @core.Cell, clickable : Bool) -> String {
   let fixed = if cell.fixed { " fixed-cell" } else { "" }
   let can_click = clickable && !cell.fixed
   let click = if can_click { " clickable" } else { "" }
-  let styles = @css.combine([cell_base(), cell_face(cell.color, cell.fixed)])
+  let styles = @css.combine([
+    cell_base(cols, rows),
+    cell_face(cell.color, cell.fixed),
+  ])
   let interactive = if can_click { " " + clickable_class() } else { "" }
   "cell \{color}\{fixed}\{click} \{styles}\{interactive}"
 }
@@ -277,7 +302,8 @@ fn stage_button(
 }
 
 ///|
-/// ステージ選択画面。30ステージがならぶ。
+/// ステージ選択画面。50ステージがならぶ。プレイ画面と違い、ここは
+/// スクロールを許可する（一覧性を優先し、無理に詰め込んで見づらくしない）。
 fn select_view(state : AppState, dispatch : (Msg) -> Unit) -> DomNode {
   let buttons : Array[DomNode] = []
   let mut cleared_count = 0
@@ -296,8 +322,10 @@ fn select_view(state : AppState, dispatch : (Msg) -> Unit) -> DomNode {
     p(class="tagline mt-1 text-xs text-gray-500 sm:text-sm") <| [
       text("白と黒の反転パズル"),
     ],
-    div(class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3") <| [
-      div(class="stages grid grid-cols-6 gap-2 sm:gap-2.5") <| buttons,
+    div(
+      class="stages-scroll flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto py-2",
+    ) <| [
+      div(class="stages grid grid-cols-5 gap-2 sm:gap-2.5") <| buttons,
       p(class="progress text-xs text-gray-400") <| [
         text("クリア \{cleared_count} / \{@core.levels().length()}"),
       ],
@@ -317,7 +345,7 @@ fn board_view(game : @core.GameState, dispatch : (Msg) -> Unit) -> DomNode {
         Some(cell) =>
           cells.push(
             div(
-              class=cell_class(cell, clickable),
+              class=cell_class(cell, clickable, board.width, board.height),
               on=events().click(_ => dispatch(Game(@core.Flip(x, y)))),
             ) <| [],
           )
@@ -592,9 +620,11 @@ fn answer_modal(level : @core.Level, dispatch : (Msg) -> Unit) -> DomNode {
           "★のマス（\{level.budget}か所）を反転してから、「進める」をくり返す。",
         ),
       ],
-      div(
-        class="answer-board my-3 grid w-fit gap-1 rounded-xl bg-[#d9d4c8] p-2 \{columns}",
-      ) <| cells,
+      div(class="answer-board-scroll my-3 max-w-full overflow-x-auto") <| [
+        div(
+          class="answer-board grid w-fit gap-1 rounded-xl bg-[#d9d4c8] p-2 \{columns}",
+        ) <| cells,
+      ],
       p(class="text-xs text-gray-400") <| [
         text("答えはひとつとはかぎらない"),
       ],
