@@ -174,6 +174,8 @@ fn cell_base(cols : Int, rows : Int) -> String {
   )
   // sm 以上: app は max-w-3xl(48rem) で頭打ちになるので min(100vw, 48rem) を使う。
   // app px-4(1rem)*2 + 盤面 sm:p-3(0.75rem)*2 = 3.5rem。
+  // max_size は広い画面でセルが間延びして見えないよう、モバイルの見た目に近い
+  // 上限で頭打ちにする（PC で不自然に大きくならないようにする）。
   let sm_fit = fit_size(
     cols,
     rows,
@@ -181,7 +183,7 @@ fn cell_base(cols : Int, rows : Int) -> String {
     "16.5",
     "0.375",
     "1.5",
-    "7",
+    "5",
   )
   @css.combine([
     @css.styles([
@@ -325,6 +327,7 @@ fn stage_size() -> String {
     "1.75",
     "4",
   )
+  // max_size はモバイルの見た目に近い上限で頭打ちにし、PC で間延びしないようにする。
   let sm_fit = fit_size(
     stage_cols,
     stage_rows,
@@ -332,7 +335,7 @@ fn stage_size() -> String {
     "7",
     "0.625",
     "2.25",
-    "6.5",
+    "4.5",
   )
   @css.combine([
     @css.styles([("width", mobile_fit), ("height", mobile_fit)]),
