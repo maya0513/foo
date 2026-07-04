@@ -132,13 +132,61 @@ pub fn update_app(state : AppState, msg : Msg) -> AppState {
 }
 
 ///|
-/// セルの共通スタイル。モバイルは 2.5rem、sm 以上で 3.25rem。
-/// 高さの低い画面（横持ちスマホ等）ではさらに縮めて無スクロールを保つ。
-fn cell_base() -> String {
+/// 「幅方向の制約」と「高さ方向の制約」のうち小さいほうを採用し、
+/// min_size 〜 max_size にクランプする正方形セルのサイズ式を作る。
+/// これにより、盤面・グリッドが小さいステージでは画面を活かして大きく、
+/// 大きいステージでは画面からはみ出さないよう自動的に縮む
+/// （無スクロールを保ったまま、余白の偏りを解消する）。
+///
+/// - available_w: 利用可能幅を表す CSS 式（ブレークポイントごとに変える）
+/// - header_h: ヘッダー・フッターなど盤面/グリッド以外が占める高さの概算（rem）
+fn fit_size(
+  cols : Int,
+  rows : Int,
+  available_w : String,
+  header_h : String,
+  gap : String,
+  min_size : String,
+  max_size : String,
+) -> String {
+  let w = "calc((\{available_w} - \{cols - 1} * \{gap}rem) / \{cols})"
+  let h = "calc((100dvh - \{header_h}rem - \{rows - 1} * \{gap}rem) / \{rows})"
+  "clamp(\{min_size}rem, min(\{max_size}rem, \{w}, \{h}), \{max_size}rem)"
+}
+
+///|
+/// セルの共通スタイル。
+/// 幅は「app の左右パディング + 盤面自体の左右パディング」を、高さは
+/// 「トップバー・見出し・ステータス・操作ボタン・メッセージ欄など
+/// 盤面以外が占める高さの概算（実測ベース、約14.5rem）+ 盤面自体の上下パディング」
+/// を差し引いて算出する（fit_size の header_h は「グリッド以外＋グリッド自身の
+/// パディング」の合計を渡す設計。gap 分は fit_size 側で別途差し引かれる）。
+fn cell_base(cols : Int, rows : Int) -> String {
+  // モバイル: app px-3(0.75rem)*2 + 盤面 p-2(0.5rem)*2 = 2.5rem。
+  let mobile_fit = fit_size(
+    cols,
+    rows,
+    "calc(100vw - 2.5rem)",
+    "16",
+    "0.25",
+    "1.75",
+    "4.5",
+  )
+  // sm 以上: app は max-w-2xl(42rem) で頭打ちになるので min(100vw, 42rem) を使う。
+  // app px-4(1rem)*2 + 盤面 sm:p-3(0.75rem)*2 = 3.5rem。
+  let sm_fit = fit_size(
+    cols,
+    rows,
+    "calc(min(100vw, 42rem) - 3.5rem)",
+    "16.5",
+    "0.375",
+    "1.5",
+    "5.5",
+  )
   @css.combine([
     @css.styles([
-      ("width", "2.5rem"),
-      ("height", "2.5rem"),
+      ("width", mobile_fit),
+      ("height", mobile_fit),
       ("border-radius", "0.625rem"),
       ("display", "flex"),
       ("align-items", "center"),
@@ -146,12 +194,9 @@ fn cell_base() -> String {
       ("font-size", "1rem"),
       ("user-select", "none"),
     ]),
-    @css.at_sm("width", "3.25rem"),
-    @css.at_sm("height", "3.25rem"),
+    @css.at_sm("width", sm_fit),
+    @css.at_sm("height", sm_fit),
     @css.at_sm("font-size", "1.125rem"),
-    @css.media("max-height:520px", "width", "2rem"),
-    @css.media("max-height:520px", "height", "2rem"),
-    @css.media("max-height:520px", "font-size", "0.875rem"),
   ])
 }
 
@@ -197,7 +242,12 @@ fn clickable_class() -> String {
 
 ///|
 /// マスの class。マーカークラス + @css の生成クラス。
-fn cell_class(cell : @core.Cell, clickable : Bool) -> String {
+fn cell_class(
+  cell : @core.Cell,
+  clickable : Bool,
+  cols : Int,
+  rows : Int,
+) -> String {
   let color = match cell.color {
     White => "white"
     Black => "black"
@@ -205,7 +255,10 @@ fn cell_class(cell : @core.Cell, clickable : Bool) -> String {
   let fixed = if cell.fixed { " fixed-cell" } else { "" }
   let can_click = clickable && !cell.fixed
   let click = if can_click { " clickable" } else { "" }
-  let styles = @css.combine([cell_base(), cell_face(cell.color, cell.fixed)])
+  let styles = @css.combine([
+    cell_base(cols, rows),
+    cell_face(cell.color, cell.fixed),
+  ])
   let interactive = if can_click { " " + clickable_class() } else { "" }
   "cell \{color}\{fixed}\{click} \{styles}\{interactive}"
 }
@@ -249,6 +302,44 @@ fn topbar_view(
 }
 
 ///|
+/// ステージ選択のグリッドの列数・行数（30ステージ = 5列 x 6行 固定）。
+let stage_cols : Int = 5
+
+///|
+let stage_rows : Int = 6
+
+///|
+/// ステージボタンのサイズ。盤面セルと同じ fit_size の考え方で、
+/// 画面の残り幅・残り高さに応じて可変にする（stages コンテナに
+/// パディングは無いので、利用可能幅は app の内側幅そのまま）。
+fn stage_size() -> String {
+  // モバイル: app px-3(0.75rem)*2 = 1.5rem（stages にパディングは無い）。
+  let mobile_fit = fit_size(
+    stage_cols,
+    stage_rows,
+    "calc(100vw - 1.5rem)",
+    "6.5",
+    "0.5",
+    "1.75",
+    "4",
+  )
+  let sm_fit = fit_size(
+    stage_cols,
+    stage_rows,
+    "calc(min(100vw, 42rem) - 2rem)",
+    "6.5",
+    "0.625",
+    "2.25",
+    "5",
+  )
+  @css.combine([
+    @css.styles([("width", mobile_fit), ("height", mobile_fit)]),
+    @css.at_sm("width", sm_fit),
+    @css.at_sm("height", sm_fit),
+  ])
+}
+
+///|
 /// ステージ選択のマスひとつ。ゲームの目的（黒を白に染める）と合わせ、
 /// クリア済みは白地に太いインク枠+✓バッジで示す。未クリアは「まだ染まっていない」
 /// ニュートラルなグレーで、ロック済みだと誤読されないようにする。
@@ -257,7 +348,7 @@ fn stage_button(
   cleared : Bool,
   dispatch : (Msg) -> Unit,
 ) -> DomNode {
-  let base = "stage relative h-10 w-10 cursor-pointer rounded-xl border text-sm transition-colors sm:h-12 sm:w-12 sm:text-base"
+  let base = "stage relative cursor-pointer rounded-xl border text-sm transition-colors sm:text-base \{stage_size()}"
   let cls = if cleared {
     "\{base} done border-2 border-ink bg-white text-ink"
   } else {
@@ -297,6 +388,7 @@ fn select_view(state : AppState, dispatch : (Msg) -> Unit) -> DomNode {
       text("白と黒の反転パズル"),
     ],
     div(class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3") <| [
+      // grid-cols-5 は stage_cols(5)、gap は stage_size() の gap 引数と一致させること。
       div(class="stages grid grid-cols-5 gap-2 sm:gap-2.5") <| buttons,
       p(class="progress text-xs text-gray-400") <| [
         text("クリア \{cleared_count} / \{@core.levels().length()}"),
@@ -317,7 +409,7 @@ fn board_view(game : @core.GameState, dispatch : (Msg) -> Unit) -> DomNode {
         Some(cell) =>
           cells.push(
             div(
-              class=cell_class(cell, clickable),
+              class=cell_class(cell, clickable, board.width, board.height),
               on=events().click(_ => dispatch(Game(@core.Flip(x, y)))),
             ) <| [],
           )
