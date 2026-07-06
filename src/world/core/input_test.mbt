@@ -36,6 +36,18 @@ test "move_direction: yaw=0 は恒等、長さ保存、回転で長さ不変" {
 }
 
 ///|
+test "move_direction: strafe 右は画面の右（三次元は右手系なので +z を向くとき -x）" {
+  // カメラが +z を向く（yaw=0）とき、画面の右は -x 方向。
+  let (dx, dz) = @core.move_direction(1.0, 0.0, 0.0)
+  assert_true((dx - -1.0).abs() < 1.0e-9)
+  assert_true(dz.abs() < 1.0e-9)
+  // カメラが +x を向く（yaw=π/2）とき、画面の右は +z 方向。
+  let (ex, ez) = @core.move_direction(1.0, 0.0, 3.141592653589793 / 2.0)
+  assert_true(ex.abs() < 1.0e-9)
+  assert_true((ez - 1.0).abs() < 1.0e-9)
+}
+
+///|
 test "move_direction: 斜め入力も長さ 1 以下に正規化" {
   let (dx, dz) = @core.move_direction(1.0, 1.0, 0.0)
   let len = (dx * dx + dz * dz).sqrt()

@@ -61,9 +61,10 @@ pub fn move_direction(
   }
   let c = @math.cos(yaw)
   let s = @math.sin(yaw)
-  // forward(+) をカメラ前方 (sin yaw, cos yaw)、strafe(+) を右 (cos yaw, -sin yaw) へ
-  let dx = fz * s + sx * c
-  let dz = fz * c - sx * s
+  // forward(+) はカメラ前方 (sin yaw, cos yaw)。
+  // 画面の右は右手系の forward × up = (-cos yaw, sin yaw)（+z を向くとき -x）。
+  let dx = fz * s - sx * c
+  let dz = fz * c + sx * s
   (dx, dz)
 }
 

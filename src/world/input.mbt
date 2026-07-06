@@ -144,8 +144,9 @@ fn subscribe_camera(canvas : @jscore.Any) -> Unit {
       let id : Double = e._get("pointerId").cast()
       if id == drag.pointer_id {
         let (px, py) = pointer_xy(e)
-        // ドラッグ右 → 視点も右へ（マウスルック規約）
-        input.cam_dyaw = input.cam_dyaw + (px - drag.last_x) * 0.006
+        // ドラッグ右 → 視点も右へ（マウスルック規約）。
+        // 右手系では画面右 = yaw 減少方向なので符号を反転する。
+        input.cam_dyaw = input.cam_dyaw - (px - drag.last_x) * 0.006
         input.cam_dpitch = input.cam_dpitch + (py - drag.last_y) * 0.004
         drag.last_x = px
         drag.last_y = py
