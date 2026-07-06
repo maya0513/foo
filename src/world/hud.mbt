@@ -28,7 +28,10 @@ fn build_hud(app : @dom.Element, show_stick : Bool) -> Unit {
 
 ///|
 fn hud_view(show_stick : Bool) -> @element.DomNode {
-  let children : Array[@element.DomNode] = [title_card(), hints_card()]
+  let children : Array[@element.DomNode] = [
+    title_card(),
+    hints_card(show_stick),
+  ]
   if show_stick {
     children.push(joystick())
   }
@@ -42,21 +45,23 @@ fn title_card() -> @element.DomNode {
     class="absolute left-4 top-4 rounded-2xl bg-white/55 px-4 py-3 shadow-lg backdrop-blur",
     [
       @element.div(class="text-lg font-bold text-slate-800", [
-        @element.text("そよかぜの丘"),
-      ]),
-      @element.div(class="text-xs font-medium tracking-wide text-slate-600", [
-        @element.text("Breezy Hills"),
+        @element.text("オープンワールド"),
       ]),
     ],
   )
 }
 
 ///|
-fn hints_card() -> @element.DomNode {
+fn hints_card(show_stick : Bool) -> @element.DomNode {
+  let hint = if show_stick {
+    "左下スティックで移動 · スワイプで視点"
+  } else {
+    "WASD / 矢印キーで移動 · ドラッグで視点 · ホイールでズーム"
+  }
   @element.div(
     class="absolute right-4 top-4 rounded-xl bg-white/45 px-3 py-2 text-xs text-slate-700 shadow backdrop-blur transition-opacity duration-1000",
     ref_=fn(el) { hud_refs.hints = el.as_any() },
-    [@element.text("WASD / 矢印キーで散策")],
+    [@element.text(hint)],
   )
 }
 
@@ -80,7 +85,7 @@ fn loading_screen() -> @element.DomNode {
     ref_=fn(el) { hud_refs.loading = el.as_any() },
     [
       @element.div(class="text-2xl font-bold text-slate-700", [
-        @element.text("そよかぜの丘"),
+        @element.text("オープンワールド"),
       ]),
       @element.div(class="text-sm text-slate-500", [
         @element.text("世界を生成しています…"),

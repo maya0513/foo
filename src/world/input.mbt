@@ -107,6 +107,70 @@ fn begin_stick(e : @jscore.Any) -> Unit {
 }
 
 ///|
+/// 視点ドラッグの追跡状態。スティックとは別ポインタで独立に動く
+/// （スティックのポインタはスティック要素が受けるため canvas へは届かない）。
+priv struct DragCtl {
+  mut active : Bool
+  mut pointer_id : Double
+  mut last_x : Double
+  mut last_y : Double
+}
+
+///|
+let drag : DragCtl = {
+  active: false,
+  pointer_id: -1.0,
+  last_x: 0.0,
+  last_y: 0.0,
+}
+
+///|
+/// 視点操作の購読。canvas 上のドラッグ（マウス/スワイプ）で yaw/pitch、
+/// ホイールでズーム。移動キーとは完全に独立。
+fn subscribe_camera(canvas : @jscore.Any) -> Unit {
+  add_listener(canvas, "pointerdown", fn(e) {
+    let button : Double = e._get("button").cast()
+    if button == 0.0 && !drag.active {
+      drag.active = true
+      drag.pointer_id = e._get("pointerId").cast()
+      let (px, py) = pointer_xy(e)
+      drag.last_x = px
+      drag.last_y = py
+    }
+  })
+  let win = @dom.window().as_event_target()
+  win.addEventListener("pointermove", fn(e) {
+    if drag.active {
+      let id : Double = e._get("pointerId").cast()
+      if id == drag.pointer_id {
+        let (px, py) = pointer_xy(e)
+        // ドラッグ右 → 視点も右へ（マウスルック規約）
+        input.cam_dyaw = input.cam_dyaw + (px - drag.last_x) * 0.006
+        input.cam_dpitch = input.cam_dpitch + (py - drag.last_y) * 0.004
+        drag.last_x = px
+        drag.last_y = py
+      }
+    }
+  })
+  let end_drag = fn(e : @jscore.Any) {
+    if drag.active {
+      let id : Double = e._get("pointerId").cast()
+      if id == drag.pointer_id {
+        drag.active = false
+      }
+    }
+  }
+  win.addEventListener("pointerup", end_drag)
+  win.addEventListener("pointercancel", end_drag)
+  // ホイールでズーム（1 ノッチ ≈ 1m）。ページスクロールは抑止
+  add_listener(canvas, "wheel", fn(e) {
+    e._call("preventDefault", []) |> ignore
+    let dy : Double = e._get("deltaY").cast()
+    input.cam_dzoom = input.cam_dzoom + dy * 0.01
+  })
+}
+
+///|
 /// スティックのドラッグ購読。pointerdown はマウント後の実要素へ直接結び
 /// （luna の on= / ref_ はここで返す仮想ノードと実ノードがずれるため使わない）、
 /// 以降の追従は window で拾う（指が本体外へ出ても切れない）。

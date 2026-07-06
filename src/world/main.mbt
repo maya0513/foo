@@ -30,8 +30,10 @@ async fn start() -> Unit noraise {
       let ratio = @dom.window().devicePixelRatio()
       stage.renderer.set_pixel_ratio(if ratio > 2.0 { 2.0 } else { ratio })
       stage.renderer.set_size(w, h)
-      prepend_canvas(app.as_any(), stage.renderer.dom_element())
+      let canvas = stage.renderer.dom_element()
+      prepend_canvas(app.as_any(), canvas)
       subscribe_keyboard()
+      subscribe_camera(canvas)
       if show_stick {
         subscribe_stick()
       }
@@ -53,11 +55,29 @@ fn frame(stage : Stage, spec : @core.Spec, lp : Loop) -> Unit {
   // タブ復帰などの巨大 dt を抑える
   let dt = if raw > 0.05 { 0.05 } else if raw < 0.0 { 0.0 } else { raw }
   let (strafe, forward) = current_axes()
-  lp.game = @core.step_game(spec, lp.game, strafe, forward, dt)
+  let (dyaw, dpitch, dzoom) = take_cam_deltas()
+  lp.game = @core.step_game(
+    spec,
+    lp.game,
+    strafe,
+    forward,
+    dyaw,
+    dpitch,
+    dzoom,
+    dt,
+  )
   apply_frame(stage, lp.game)
   stage.renderer.render(stage.scene, stage.camera)
   let p = lp.game.player
-  set_debug_hook(p.x, p.y, p.z, strafe, forward)
+  set_debug_hook(
+    p.x,
+    p.y,
+    p.z,
+    strafe,
+    forward,
+    lp.game.camera.yaw,
+    lp.game.camera.pitch,
+  )
   if !lp.moved && (strafe.abs() > 0.05 || forward.abs() > 0.05) {
     lp.moved = true
     fade_hints()

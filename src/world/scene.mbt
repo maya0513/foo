@@ -89,11 +89,13 @@ fn build_trees(
   if n == 0 {
     return
   }
-  let trunk_geo = @three.new_cylinder(m, 0.16, 0.26, 1.6, seg=6)
+  // プレイヤー(1.7m)に対して見上げる高さ（樹高 8〜14m）にする。
+  // ミニチュア感を避けるため、標準視点で梢が視界の上に抜けるスケール。
+  let trunk_geo = @three.new_cylinder(m, 0.24, 0.38, 3.2, seg=6)
   let trunk_mat = @three.new_standard_material(m, 0x6b4a2f, roughness=0.95)
   let trunk = @three.new_instanced_mesh(m, trunk_geo, trunk_mat, n)
-  let lower_geo = @three.new_cone(m, 1.5, 2.6, seg=7)
-  let upper_geo = @three.new_cone(m, 1.05, 2.2, seg=7)
+  let lower_geo = @three.new_cone(m, 2.6, 5.0, seg=7)
+  let upper_geo = @three.new_cone(m, 1.8, 4.2, seg=7)
   let leaf_mat = @three.new_standard_material(m, 0xffffff)
   let lower = @three.new_instanced_mesh(m, lower_geo, leaf_mat, n)
   let upper = @three.new_instanced_mesh(m, upper_geo, leaf_mat, n)
@@ -103,9 +105,9 @@ fn build_trees(
   for i = 0; i < n; i = i + 1 {
     let t = trees[i]
     let s = t.scale
-    trunk.set_instance(m, i, t.x, t.y + 0.8 * s, t.z, t.rot, s)
-    lower.set_instance(m, i, t.x, t.y + (1.6 + 1.0) * s, t.z, t.rot, s)
-    upper.set_instance(m, i, t.x, t.y + (1.6 + 2.2) * s, t.z, t.rot, s)
+    trunk.set_instance(m, i, t.x, t.y + 1.6 * s, t.z, t.rot, s)
+    lower.set_instance(m, i, t.x, t.y + (2.9 + 2.5) * s, t.z, t.rot, s)
+    upper.set_instance(m, i, t.x, t.y + (5.3 + 2.1) * s, t.z, t.rot, s)
     let (r, g, b) = greens[t.variant % 3]
     lower.set_instance_color(i, r, g, b)
     upper.set_instance_color(i, r * 1.08, g * 1.08, b * 1.08)
@@ -138,7 +140,8 @@ fn build_rocks(
   let im = @three.new_instanced_mesh(m, geo, mat, n)
   for i = 0; i < n; i = i + 1 {
     let rk = rocks[i]
-    im.set_instance(m, i, rk.x, rk.y + rk.scale * 0.3, rk.z, rk.rot, rk.scale)
+    // プレイヤーの腰〜背丈ほどの岩になるよう底を少し沈めて置く
+    im.set_instance(m, i, rk.x, rk.y + rk.scale * 0.35, rk.z, rk.rot, rk.scale)
   }
   im.commit()
   im.as_object3d().set_cast_shadow(true)

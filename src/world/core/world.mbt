@@ -15,7 +15,7 @@ pub(all) struct Spec {
 }
 
 ///|
-/// 「そよかぜの丘」の既定仕様。牧歌的で歩き回れる島になるよう調整済み。
+/// オープンワールドの既定仕様。牧歌的で歩き回れる島になるよう調整済み。
 pub fn default_spec() -> Spec {
   {
     seed: 20260706U,
@@ -52,18 +52,22 @@ pub fn init_game(spec : Spec) -> GameState {
 }
 
 ///|
-/// 1 フレーム進める。入力はカメラ相対の (strafe, forward)（各 -1..1）。
-/// カメラの現在の向きで移動方向を回し、プレイヤー → カメラの順に更新する。
+/// 1 フレーム進める。移動入力はカメラ相対の (strafe, forward)（各 -1..1）、
+/// 視点入力は (dyaw, dpitch, dzoom)。移動と視点は独立：キーは移動だけ、
+/// ドラッグ/スワイプ/ホイールは視点だけを動かす。
 pub fn step_game(
   spec : Spec,
   state : GameState,
   strafe : Double,
   forward : Double,
+  dyaw : Double,
+  dpitch : Double,
+  dzoom : Double,
   dt : Double,
 ) -> GameState {
-  let yaw = camera_yaw(state.camera, state.player)
+  let yaw = camera_yaw(state.camera)
   let (dx, dz) = move_direction(strafe, forward, yaw)
   let player = step_player(spec, state.player, dx, dz, move_speed, dt)
-  let camera = step_camera(spec, state.camera, player, dt)
+  let camera = step_camera(spec, state.camera, player, dyaw, dpitch, dzoom, dt)
   { player, camera, time: state.time + dt }
 }

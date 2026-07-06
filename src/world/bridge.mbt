@@ -12,6 +12,9 @@ priv struct InputState {
   mut stick_x : Double // 右が +
   mut stick_z : Double // 前（画面奥）が +
   mut stick_active : Bool
+  mut cam_dyaw : Double // このフレームで消費する視点回転 [rad]
+  mut cam_dpitch : Double
+  mut cam_dzoom : Double
 }
 
 ///|
@@ -23,6 +26,19 @@ let input : InputState = {
   stick_x: 0.0,
   stick_z: 0.0,
   stick_active: false,
+  cam_dyaw: 0.0,
+  cam_dpitch: 0.0,
+  cam_dzoom: 0.0,
+}
+
+///|
+/// 前フレームからたまった視点操作量を取り出してリセットする（フレームで一度だけ消費）。
+fn take_cam_deltas() -> (Double, Double, Double) {
+  let v = (input.cam_dyaw, input.cam_dpitch, input.cam_dzoom)
+  input.cam_dyaw = 0.0
+  input.cam_dpitch = 0.0
+  input.cam_dzoom = 0.0
+  v
 }
 
 ///|
@@ -65,8 +81,11 @@ extern "js" fn set_debug_hook(
   z : Double,
   strafe : Double,
   forward : Double,
+  cam_yaw : Double,
+  cam_pitch : Double,
 ) -> Unit =
-  #| (x, y, z, strafe, forward) => { globalThis.__world = { x, y, z, strafe, forward }; }
+  #| (x, y, z, strafe, forward, camYaw, camPitch) =>
+  #|   { globalThis.__world = { x, y, z, strafe, forward, camYaw, camPitch }; }
 
 ///|
 /// dev / E2E 用フック。シーングラフを globalThis.__stage に出して外から検分できるようにする。

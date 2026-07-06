@@ -15,7 +15,7 @@ pub(all) struct Placement {
 /// 木の群生。中腹帯（水際より上・岩場より下）に、ノイズ密度マスクで固まって生える。
 pub fn scatter_trees(spec : Spec) -> Array[Placement] {
   let out : Array[Placement] = []
-  let n = 64
+  let n = 46
   let size = spec.half_size * 2.0
   let cell = size / n.to_double()
   let salt = 0x54524545U // "TREE"
@@ -98,7 +98,7 @@ pub fn scatter_rocks(spec : Spec) -> Array[Placement] {
       let rot = to_unit(hash3(spec.seed ^ salt, i, j, 4)) *
         2.0 *
         3.141592653589793
-      let scale = 0.35 + to_unit(hash3(spec.seed ^ salt, i, j, 5)) * 0.75
+      let scale = 0.5 + to_unit(hash3(spec.seed ^ salt, i, j, 5)) * 1.3
       out.push({ x, y: h, z, rot, scale, variant })
     }
   }
