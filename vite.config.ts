@@ -26,6 +26,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL("./pages/index.html", import.meta.url)),
         flip: fileURLToPath(new URL("./pages/flip/index.html", import.meta.url)),
+        world: fileURLToPath(new URL("./pages/world/index.html", import.meta.url)),
       },
     },
   },

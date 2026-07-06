@@ -1,0 +1,17 @@
+import {
+  "mizchi/luna/dom" @element,
+  "mizchi/js",
+  "mizchi/js/core" @jscore,
+  "mizchi/js/browser/dom",
+  "mizchi/js/web/event",
+  "mizchi/luna/x/css",
+  "maya0513/foo/world/three",
+  "maya0513/foo/world/core",
+}
+
+supported_targets = "js"
+
+options(
+  "is-main": true,
+  link: { "js": { "format": "esm" } },
+)

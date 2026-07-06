@@ -18,7 +18,7 @@ pub fn stage_query(index : Int) -> String {
 /// プレフィックス不一致・数字以外の混入・空・範囲外はすべて None。
 pub fn parse_stage(search : String, level_count : Int) -> Int? {
   let prefix = "?stage="
-  if !(search.has_prefix(prefix)) {
+  if !search.has_prefix(prefix) {
     return None
   }
   let digits = prefix.length()
@@ -29,7 +29,7 @@ pub fn parse_stage(search : String, level_count : Int) -> Int? {
   let mut i = 0
   for ch in search {
     if i >= digits {
-      if !(ch.is_ascii_digit()) {
+      if !ch.is_ascii_digit() {
         return None
       }
       n = n * 10 + (ch.to_int() - '0'.to_int())
@@ -49,9 +49,17 @@ pub fn parse_stage(search : String, level_count : Int) -> Int? {
 pub fn sync_url(prev : Screen, next : Screen) -> Unit {
   match (prev, next) {
     (Select, Play(g)) =>
-      @history.history().pushState(@jscore.null(), "", url=stage_query(g.level_index))
+      @history.history().pushState(
+        @jscore.null(),
+        "",
+        url=stage_query(g.level_index),
+      )
     (Play(_), Play(g)) =>
-      @history.history().replaceState(@jscore.null(), "", url=stage_query(g.level_index))
+      @history.history().replaceState(
+        @jscore.null(),
+        "",
+        url=stage_query(g.level_index),
+      )
     (Play(_), Select) => @history.history().back()
     _ => ()
   }

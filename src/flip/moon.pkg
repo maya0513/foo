@@ -1,0 +1,20 @@
+import {
+  "mizchi/luna/dom" @element,
+  "mizchi/js/browser/dom",
+  "mizchi/js/browser/history",
+  "mizchi/js/browser/location",
+  "mizchi/js/core" @jscore,
+  "mizchi/luna/x/css",
+  "maya0513/foo/flip/core",
+}
+
+supported_targets = "js"
+
+import {
+  "moonbitlang/core/debug",
+} for "wbtest"
+
+options(
+  "is-main": true,
+  link: { "js": { "format": "esm" } },
+)

@@ -16,7 +16,10 @@ fn main {
   match @dom.document().getElementById("app") {
     Some(el) => {
       let cleared = load_cleared(@core.levels().length())
-      let stage = parse_stage(@location.location().search, @core.levels().length())
+      let stage = parse_stage(
+        @location.location().search,
+        @core.levels().length(),
+      )
       let initial = match stage {
         Some(i) => {
           // 直リンク・リロード時の救済: Select エントリを合成してから

@@ -1,0 +1,125 @@
+///| 入力の購読。DOM イベントを InputState（bridge）へ流し込むだけで、
+/// 移動の意味づけ（正規化・カメラ相対化）は core が担う。
+
+///|
+/// 仮想スティックの操作に必要な DOM 参照と幾何。
+priv struct StickCtl {
+  mut knob : @jscore.Any
+  mut cx : Double
+  mut cy : Double
+  mut radius : Double
+  mut dragging : Bool
+}
+
+///|
+let stick : StickCtl = {
+  knob: @jscore.undefined(),
+  cx: 0.0,
+  cy: 0.0,
+  radius: 60.0,
+  dragging: false,
+}
+
+///|
+/// イベントから clientX/clientY を取り出す。
+fn pointer_xy(e : @jscore.Any) -> (Double, Double) {
+  (e._get("clientX").cast(), e._get("clientY").cast())
+}
+
+///|
+/// キー文字列を InputState のフラグへ反映。既知キーなら true を返す。
+fn set_key(key : String, pressed : Bool) -> Bool {
+  match key {
+    "w" | "W" | "ArrowUp" => input.up = pressed
+    "s" | "S" | "ArrowDown" => input.down = pressed
+    "a" | "A" | "ArrowLeft" => input.left = pressed
+    "d" | "D" | "ArrowRight" => input.right = pressed
+    _ => return false
+  }
+  true
+}
+
+///|
+/// キーボード購読（window）。矢印キーの既定スクロールは抑止。
+fn subscribe_keyboard() -> Unit {
+  let target = @dom.window().as_event_target()
+  target.addEventListener("keydown", fn(e) {
+    if set_key(e._get("key").to_string(), true) {
+      e._call("preventDefault", []) |> ignore
+    }
+  })
+  target.addEventListener("keyup", fn(e) {
+    set_key(e._get("key").to_string(), false) |> ignore
+  })
+  // フォーカスを失ったら全キー解除（押しっぱなし暴走を防ぐ）
+  target.addEventListener("blur", fn(_e) {
+    input.up = false
+    input.down = false
+    input.left = false
+    input.right = false
+  })
+}
+
+///|
+/// スティックのノブ位置と InputState を、ポインタ座標から更新する。
+fn update_stick(px : Double, py : Double) -> Unit {
+  let dx = px - stick.cx
+  let dy = py - stick.cy
+  let r = stick.radius
+  // ノブ表示は半径内にクランプ
+  let len = (dx * dx + dy * dy).sqrt()
+  let (kx, ky) = if len > r { (dx / len * r, dy / len * r) } else { (dx, dy) }
+  set_style(
+    stick.knob,
+    "transform",
+    "translate(" + kx.to_string() + "px," + ky.to_string() + "px)",
+  )
+  // 入力値は [-1,1]。画面の下方向(+y)は「後退」なので z は符号反転。
+  input.stick_x = (dx / r).clamp(min=-1.0, max=1.0)
+  input.stick_z = (-dy / r).clamp(min=-1.0, max=1.0)
+  input.stick_active = true
+}
+
+///|
+/// ノブを中央へ戻し、入力を解除。
+fn release_stick() -> Unit {
+  stick.dragging = false
+  input.stick_active = false
+  input.stick_x = 0.0
+  input.stick_z = 0.0
+  set_style(stick.knob, "transform", "translate(0px,0px)")
+}
+
+///|
+/// スティック本体の pointerdown（luna の on= 経由）で掴む。
+/// イベントの currentTarget から base 要素・ノブ・中心・半径を得る。
+fn begin_stick(e : @jscore.Any) -> Unit {
+  e._call("preventDefault", []) |> ignore
+  let base = e._get("currentTarget")
+  stick.knob = first_element_child(base)
+  let (l, t, w, h) = bounding_rect(base)
+  stick.cx = l + w / 2.0
+  stick.cy = t + h / 2.0
+  stick.radius = w / 2.0
+  stick.dragging = true
+  let (px, py) = pointer_xy(e)
+  update_stick(px, py)
+}
+
+///|
+/// スティックのドラッグ購読。pointerdown はマウント後の実要素へ直接結び
+/// （luna の on= / ref_ はここで返す仮想ノードと実ノードがずれるため使わない）、
+/// 以降の追従は window で拾う（指が本体外へ出ても切れない）。
+fn subscribe_stick() -> Unit {
+  let base = query_one("#world-stick")
+  add_listener(base, "pointerdown", fn(e) { begin_stick(e) })
+  let win = @dom.window().as_event_target()
+  win.addEventListener("pointermove", fn(e) {
+    if stick.dragging {
+      let (px, py) = pointer_xy(e)
+      update_stick(px, py)
+    }
+  })
+  win.addEventListener("pointerup", fn(_e) { release_stick() })
+  win.addEventListener("pointercancel", fn(_e) { release_stick() })
+}

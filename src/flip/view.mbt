@@ -164,26 +164,14 @@ fn fit_size(
 fn cell_base(cols : Int, rows : Int) -> String {
   // モバイル: app px-3(0.75rem)*2 + 盤面 p-2(0.5rem)*2 = 2.5rem。
   let mobile_fit = fit_size(
-    cols,
-    rows,
-    "calc(100vw - 2.5rem)",
-    "16",
-    "0.25",
-    "1.75",
-    "4.5",
+    cols, rows, "calc(100vw - 2.5rem)", "16", "0.25", "1.75", "4.5",
   )
   // sm 以上: app は max-w-3xl(48rem) で頭打ちになるので min(100vw, 48rem) を使う。
   // app px-4(1rem)*2 + 盤面 sm:p-3(0.75rem)*2 = 3.5rem。
   // max_size は広い画面でセルが間延びして見えないよう、モバイルの見た目に近い
   // 上限で頭打ちにする（PC で不自然に大きくならないようにする）。
   let sm_fit = fit_size(
-    cols,
-    rows,
-    "calc(min(100vw, 48rem) - 3.5rem)",
-    "16.5",
-    "0.375",
-    "1.5",
-    "5",
+    cols, rows, "calc(min(100vw, 48rem) - 3.5rem)", "16.5", "0.375", "1.5", "5",
   )
   @css.combine([
     @css.styles([
@@ -320,22 +308,11 @@ let stage_rows : Int = 6
 fn stage_size() -> String {
   // モバイル: app px-3(0.75rem)*2 = 1.5rem（stages にパディングは無い）。
   let mobile_fit = fit_size(
-    stage_cols,
-    stage_rows,
-    "calc(100vw - 1.5rem)",
-    "7",
-    "0.5",
-    "1.75",
-    "4",
+    stage_cols, stage_rows, "calc(100vw - 1.5rem)", "7", "0.5", "1.75", "4",
   )
   // max_size はモバイルの見た目に近い上限で頭打ちにし、PC で間延びしないようにする。
   let sm_fit = fit_size(
-    stage_cols,
-    stage_rows,
-    "calc(min(100vw, 48rem) - 2rem)",
-    "7",
-    "0.625",
-    "2.25",
+    stage_cols, stage_rows, "calc(min(100vw, 48rem) - 2rem)", "7", "0.625", "2.25",
     "4.5",
   )
   @css.combine([
@@ -365,7 +342,9 @@ fn stage_button(
   let badge = if cleared {
     span(
       class="done-badge absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-ink text-[10px] leading-none text-white",
-    ) <| [text("✓")]
+    ) <| [
+      text("✓"),
+    ]
   } else {
     fragment([])
   }
@@ -397,9 +376,7 @@ fn select_view(state : AppState, dispatch : (Msg) -> Unit) -> DomNode {
     ],
     // justify-center: 縦の残り空間の中央にグリッドを置き、画面下部に
     // 空白が偏らないようにする（盤面を flex-1 中央に置くプレイ画面と揃える）
-    div(
-      class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3",
-    ) <| [
+    div(class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3") <| [
       // grid-cols-5 は stage_cols(5)、gap は stage_size() の gap 引数と一致させること。
       div(class="stages grid grid-cols-5 gap-2 sm:gap-2.5") <| buttons,
       p(class="progress text-sm font-semibold text-ink/80 sm:text-base") <| [
