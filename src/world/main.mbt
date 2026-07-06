@@ -39,7 +39,12 @@ async fn start() -> Unit noraise {
       }
       subscribe_resize(stage)
       set_stage_hook(stage.scene.as_any(), stage.camera.as_object3d().as_any())
-      let lp : Loop = { game: game0, last_ms: now_ms(), moved: false }
+      let lp : Loop = {
+        game: game0,
+        colliders: @core.colliders(spec),
+        last_ms: now_ms(),
+        moved: false,
+      }
       hide_loading()
       stage.renderer.set_animation_loop(fn() { frame(stage, spec, lp) })
     }
@@ -59,6 +64,7 @@ fn frame(stage : Stage, spec : @core.Spec, lp : Loop) -> Unit {
   lp.game = @core.step_game(
     spec,
     lp.game,
+    lp.colliders,
     strafe,
     forward,
     dyaw,

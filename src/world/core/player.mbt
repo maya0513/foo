@@ -33,9 +33,11 @@ pub fn player_spawn(spec : Spec) -> Player {
 ///|
 /// 1 フレーム分プレイヤーを進める。
 /// dir は正規化済みワールド水平方向、speed は最高速度 [m/s]、dt は秒。
+/// cols は障害物（木・岩）の衝突円。地形と障害物の両方で移動を止める。
 pub fn step_player(
   spec : Spec,
   p : Player,
+  cols : Array[Collider],
   dir_x : Double,
   dir_z : Double,
   speed : Double,
@@ -49,9 +51,17 @@ pub fn step_player(
   let vz = p.vz + (tvz - p.vz) * smooth
   // X を試す → だめなら止めて Z だけ滑らせる（壁ずり）
   let nx = p.x + vx * dt
-  let (fx, fvx) = if is_walkable(spec, nx, p.z) { (nx, vx) } else { (p.x, 0.0) }
+  let (fx, fvx) = if passable(spec, cols, nx, p.z) {
+    (nx, vx)
+  } else {
+    (p.x, 0.0)
+  }
   let nz = p.z + vz * dt
-  let (fz, fvz) = if is_walkable(spec, fx, nz) { (nz, vz) } else { (p.z, 0.0) }
+  let (fz, fvz) = if passable(spec, cols, fx, nz) {
+    (nz, vz)
+  } else {
+    (p.z, 0.0)
+  }
   let y = height_at(spec, fx, fz)
   let sp2 = fvx * fvx + fvz * fvz
   let yaw = if sp2 > 1.0e-3 { @math.atan2(fvx, fvz) } else { p.yaw }

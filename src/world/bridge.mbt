@@ -42,9 +42,11 @@ fn take_cam_deltas() -> (Double, Double, Double) {
 }
 
 ///|
-/// ループが持ち回るゲーム状態と時刻。
+/// ループが持ち回るゲーム状態と時刻。障害物の衝突円は spec から一度だけ
+/// 構築して使い回す（毎フレーム再計算しない）。
 priv struct Loop {
   mut game : @core.GameState
+  colliders : Array[@core.Collider]
   mut last_ms : Double
   mut moved : Bool
 }

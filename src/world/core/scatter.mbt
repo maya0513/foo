@@ -75,6 +75,9 @@ pub fn scatter_rocks(spec : Spec) -> Array[Placement] {
   let size = spec.half_size * 2.0
   let cell = size / n.to_double()
   let salt = 0x524f434bU // "ROCK"
+  // スポーン地点に岩が重ならないよう、その周辺だけ空ける（当たり判定で埋まらせない）
+  let spawn = player_spawn(spec)
+  let clearing = 5.0
   for j = 0; j < n; j = j + 1 {
     for i = 0; i < n; i = i + 1 {
       let jx = to_unit(hash3(spec.seed ^ salt, i, j, 0))
@@ -83,6 +86,11 @@ pub fn scatter_rocks(spec : Spec) -> Array[Placement] {
       let z = -spec.half_size + (j.to_double() + jz) * cell
       let h = height_at(spec, x, z)
       if h < spec.water_level + 0.6 {
+        continue
+      }
+      let sdx = x - spawn.x
+      let sdz = z - spawn.z
+      if sdx * sdx + sdz * sdz < clearing * clearing {
         continue
       }
       let nx = x / spec.half_size

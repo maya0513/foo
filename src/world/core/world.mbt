@@ -58,6 +58,7 @@ pub fn init_game(spec : Spec) -> GameState {
 pub fn step_game(
   spec : Spec,
   state : GameState,
+  cols : Array[Collider],
   strafe : Double,
   forward : Double,
   dyaw : Double,
@@ -67,7 +68,7 @@ pub fn step_game(
 ) -> GameState {
   let yaw = camera_yaw(state.camera)
   let (dx, dz) = move_direction(strafe, forward, yaw)
-  let player = step_player(spec, state.player, dx, dz, move_speed, dt)
+  let player = step_player(spec, state.player, cols, dx, dz, move_speed, dt)
   let camera = step_camera(spec, state.camera, player, dyaw, dpitch, dzoom, dt)
   { player, camera, time: state.time + dt }
 }

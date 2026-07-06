@@ -28,10 +28,10 @@ let min_dist : Double = 4.0
 let max_dist : Double = 18.0
 
 ///|
-let default_pitch : Double = 0.17
+let default_pitch : Double = 0.11
 
 ///|
-let default_dist : Double = 9.5
+let default_dist : Double = 6.8
 
 ///|
 /// 注視点のプレイヤー頭上オフセット（小柄なプレイヤーの頭やや上を見る）。

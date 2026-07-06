@@ -2,6 +2,9 @@
 let pspec : @core.Spec = @core.default_spec()
 
 ///|
+let pcols : Array[@core.Collider] = @core.colliders(pspec)
+
+///|
 /// 単位時間シミュレート（dt 刻みで total 秒ぶん前進入力）。
 fn sim(
   dir_x : Double,
@@ -12,7 +15,7 @@ fn sim(
   let mut p = @core.player_spawn(pspec)
   let mut t = 0.0
   while t < total {
-    p = @core.step_player(pspec, p, dir_x, dir_z, @core.move_speed, dt)
+    p = @core.step_player(pspec, p, pcols, dir_x, dir_z, @core.move_speed, dt)
     t = t + dt
   }
   p
