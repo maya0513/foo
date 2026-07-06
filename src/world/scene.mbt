@@ -151,18 +151,20 @@ fn build_rocks(
 
 ///|
 /// プレイヤー：暖色の胴（シリンダー）＋頭（球）を Group にまとめる。
+/// フィールドと木・岩を相対的に大きく見せるため、身長は約 1.1m と小柄にする。
 fn build_player(m : @three.Three) -> @three.Group {
+  let s = 0.63
   let g = @three.new_group(m)
-  let body_geo = @three.new_cylinder(m, 0.32, 0.42, 1.15, seg=10)
+  let body_geo = @three.new_cylinder(m, 0.32 * s, 0.42 * s, 1.15 * s, seg=10)
   let body_mat = @three.new_standard_material(m, 0xf2a65e, roughness=0.7)
   let body = @three.new_mesh(m, body_geo, body_mat)
-  body.as_object3d().set_position(0.0, 0.62, 0.0)
+  body.as_object3d().set_position(0.0, 0.62 * s, 0.0)
   body.as_object3d().set_cast_shadow(true)
   g.add(body.as_object3d())
-  let head_geo = @three.new_sphere(m, 0.32)
+  let head_geo = @three.new_sphere(m, 0.32 * s)
   let head_mat = @three.new_standard_material(m, 0xffe0b8, roughness=0.6)
   let head = @three.new_mesh(m, head_geo, head_mat)
-  head.as_object3d().set_position(0.0, 1.42, 0.0)
+  head.as_object3d().set_position(0.0, 1.42 * s, 0.0)
   head.as_object3d().set_cast_shadow(true)
   g.add(head.as_object3d())
   g

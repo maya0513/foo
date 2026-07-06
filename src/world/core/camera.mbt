@@ -28,14 +28,14 @@ let min_dist : Double = 4.0
 let max_dist : Double = 18.0
 
 ///|
-let default_pitch : Double = 0.30
+let default_pitch : Double = 0.17
 
 ///|
 let default_dist : Double = 9.5
 
 ///|
-/// 注視点のプレイヤー頭上オフセット。
-let look_height : Double = 2.1
+/// 注視点のプレイヤー頭上オフセット（小柄なプレイヤーの頭やや上を見る）。
+let look_height : Double = 1.4
 
 ///|
 /// yaw/pitch/dist から注視点を基準にした「望ましい」カメラ位置。
