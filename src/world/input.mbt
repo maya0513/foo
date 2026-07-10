@@ -9,6 +9,7 @@ priv struct StickCtl {
   mut cy : Double
   mut radius : Double
   mut dragging : Bool
+  mut pointer_id : Double // 掴んでいる指。視点スワイプの指と混ざらないよう識別する
 }
 
 ///|
@@ -18,6 +19,7 @@ let stick : StickCtl = {
   cy: 0.0,
   radius: 60.0,
   dragging: false,
+  pointer_id: -1.0,
 }
 
 ///|
@@ -102,6 +104,7 @@ fn begin_stick(e : @jscore.Any) -> Unit {
   stick.cy = t + h / 2.0
   stick.radius = w / 2.0
   stick.dragging = true
+  stick.pointer_id = e._get("pointerId").cast()
   let (px, py) = pointer_xy(e)
   update_stick(px, py)
 }
@@ -181,10 +184,21 @@ fn subscribe_stick() -> Unit {
   let win = @dom.window().as_event_target()
   win.addEventListener("pointermove", fn(e) {
     if stick.dragging {
-      let (px, py) = pointer_xy(e)
-      update_stick(px, py)
+      let id : Double = e._get("pointerId").cast()
+      if id == stick.pointer_id {
+        let (px, py) = pointer_xy(e)
+        update_stick(px, py)
+      }
     }
   })
-  win.addEventListener("pointerup", fn(_e) { release_stick() })
-  win.addEventListener("pointercancel", fn(_e) { release_stick() })
+  let end_stick = fn(e : @jscore.Any) {
+    if stick.dragging {
+      let id : Double = e._get("pointerId").cast()
+      if id == stick.pointer_id {
+        release_stick()
+      }
+    }
+  }
+  win.addEventListener("pointerup", end_stick)
+  win.addEventListener("pointercancel", end_stick)
 }
